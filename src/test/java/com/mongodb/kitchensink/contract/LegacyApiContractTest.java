@@ -20,7 +20,8 @@ import static org.junit.jupiter.api.Assertions.*;
 public class LegacyApiContractTest {
 
   // Legacy API base URL
-  private static final String BASE_URL = "http://localhost:8080/kitchensink/rest";
+  //private static final String BASE_URL = "http://localhost:8080/kitchensink/rest";
+  private static final String BASE_URL = "http://localhost:8081/api/v1";
 
   private static RestTemplate restTemplate;
   private static String testEmail;
