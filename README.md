@@ -35,8 +35,42 @@ A modernized version of the classic JBoss EAP Kitchensink application, migrated 
 ### Prerequisites
 - **Java 21** (JDK 21.0.9 or higher recommended)
 - **Maven 3.8+**
-- **MongoDB 6.0+** (or use Homebrew: `brew services start mongodb-community`)
+- **MongoDB 6.0+** (see installation guide below)
 - **Node.js 18+** (for frontend)
+
+#### Installing MongoDB
+
+**macOS (Homebrew):**
+```bash
+brew tap mongodb/brew
+brew install mongodb-community
+brew services start mongodb-community
+```
+
+**Docker (All Platforms - Recommended):**
+```bash
+docker run -d --name mongodb -p 27017:27017 -v mongodb_data:/data/db mongo:7.0
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+# Import MongoDB GPG key
+curl -fsSL https://www.mongodb.org/static/pgp/server-7.0.asc | sudo gpg --dearmor -o /etc/apt/trusted.gpg.d/mongodb-7.gpg
+
+# Add MongoDB repository
+echo "deb [ arch=amd64,arm64 ] https://repo.mongodb.org/apt/ubuntu jammy/mongodb-org/7.0 multiverse" | sudo tee /etc/apt/sources.list.d/mongodb-org-7.0.list
+
+# Install MongoDB
+sudo apt-get update
+sudo apt-get install -y mongodb-org
+
+# Start MongoDB
+sudo systemctl start mongod
+sudo systemctl enable mongod
+```
+
+**Windows:**
+Download and install from [MongoDB Download Center](https://www.mongodb.com/try/download/community)
 
 ### 🎯 One-Command Startup (Recommended)
 
@@ -46,12 +80,20 @@ Start MongoDB, backend, and frontend with a single command:
 ./start-all.sh
 ```
 
-This script will:
-1. ✅ Check if MongoDB is running (starts it if needed)
-2. ✅ Build the backend (Maven)
-3. ✅ Start Spring Boot backend on port 8081
-4. ✅ Start React frontend on port 3000
-5. ✅ Display URLs and credentials
+**What this script does:**
+1. ✅ **Checks if MongoDB is running** on port 27017
+2. 🔧 If not running, **prompts you to choose**:
+   - Option 1: Start existing MongoDB (Homebrew)
+   - Option 2: Start MongoDB with Docker (auto-installs container)
+   - Option 3: Exit and install manually
+3. ✅ Build the backend (Maven)
+4. ✅ Start Spring Boot backend on port 8081
+5. ✅ Start React frontend on port 3000
+6. ✅ Display URLs and credentials
+
+**First-time users without MongoDB:**
+- Choose **Option 2** when prompted - it will automatically pull and start MongoDB in Docker
+- No manual MongoDB installation needed!
 
 **Stop all services:**
 ```bash

@@ -62,25 +62,90 @@ echo -e "${YELLOW}[1/3] Checking MongoDB...${NC}"
 if check_port 27017; then
     print_status "success" "MongoDB is already running on port 27017"
 else
-    print_status "warning" "MongoDB is not running. Starting MongoDB..."
+    print_status "warning" "MongoDB is not running on port 27017"
+    echo ""
+    echo -e "${BLUE}MongoDB Setup Options:${NC}"
+    echo "  1. Start existing MongoDB (Homebrew)"
+    echo "  2. Start MongoDB with Docker (recommended if not installed)"
+    echo "  3. Exit and install MongoDB manually"
+    echo ""
+    read -p "Choose option (1/2/3): " -n 1 -r
+    echo ""
     
-    # Try to start MongoDB using brew services
-    if command -v brew &> /dev/null; then
-        brew services start mongodb-community &> /dev/null || brew services restart mongodb-community &> /dev/null
-        sleep 3
+    if [[ $REPLY == "1" ]]; then
+        print_status "info" "Attempting to start MongoDB via Homebrew..."
         
-        if check_port 27017; then
-            print_status "success" "MongoDB started successfully"
+        if command -v brew &> /dev/null; then
+            if brew services list | grep -q "mongodb-community"; then
+                brew services start mongodb-community &> /dev/null || brew services restart mongodb-community &> /dev/null
+                sleep 3
+                
+                if check_port 27017; then
+                    print_status "success" "MongoDB started successfully"
+                else
+                    print_status "error" "Failed to start MongoDB"
+                    echo -e "${YELLOW}Try manually: brew services start mongodb-community${NC}"
+                    exit 1
+                fi
+            else
+                print_status "error" "MongoDB not installed via Homebrew"
+                echo -e "${YELLOW}Install with: brew install mongodb-community${NC}"
+                exit 1
+            fi
         else
-            print_status "error" "Failed to start MongoDB automatically"
-            echo -e "${RED}Please start MongoDB manually:${NC}"
-            echo "  brew services start mongodb-community"
-            echo "  OR"
-            echo "  mongod --config /usr/local/etc/mongod.conf"
+            print_status "error" "Homebrew not found"
+            echo -e "${YELLOW}Install Homebrew: https://brew.sh${NC}"
             exit 1
         fi
+        
+    elif [[ $REPLY == "2" ]]; then
+        print_status "info" "Starting MongoDB with Docker..."
+        
+        if command -v docker &> /dev/null; then
+            # Check if mongodb container already exists
+            if docker ps -a --format '{{.Names}}' | grep -q "^mongodb$"; then
+                print_status "info" "MongoDB container exists, starting..."
+                docker start mongodb &> /dev/null
+            else
+                print_status "info" "Creating new MongoDB container..."
+                docker run -d --name mongodb -p 27017:27017 \
+                    -v mongodb_data:/data/db \
+                    mongo:7.0 &> /dev/null
+            fi
+            
+            # Wait for MongoDB to be ready
+            print_status "info" "Waiting for MongoDB to be ready..."
+            for i in {1..20}; do
+                if check_port 27017; then
+                    print_status "success" "MongoDB started successfully in Docker"
+                    break
+                fi
+                sleep 1
+                if [ $i -eq 20 ]; then
+                    print_status "error" "MongoDB failed to start within 20 seconds"
+                    exit 1
+                fi
+            done
+        else
+            print_status "error" "Docker not found"
+            echo -e "${YELLOW}Install Docker: https://docs.docker.com/get-docker/${NC}"
+            exit 1
+        fi
+        
     else
-        print_status "error" "Homebrew not found. Please start MongoDB manually"
+        print_status "info" "Exiting. Please install MongoDB and try again."
+        echo ""
+        echo -e "${BLUE}Installation Instructions:${NC}"
+        echo -e "${YELLOW}macOS (Homebrew):${NC}"
+        echo "  brew install mongodb-community"
+        echo "  brew services start mongodb-community"
+        echo ""
+        echo -e "${YELLOW}Docker (All platforms):${NC}"
+        echo "  docker run -d --name mongodb -p 27017:27017 mongo:7.0"
+        echo ""
+        echo -e "${YELLOW}Linux (Ubuntu/Debian):${NC}"
+        echo "  sudo apt-get install mongodb-org"
+        echo "  sudo systemctl start mongod"
         exit 1
     fi
 fi

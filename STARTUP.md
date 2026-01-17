@@ -13,7 +13,7 @@ Quick startup and shutdown scripts for the entire Kitchensink Modernized applica
 This single command will:
 1. ✅ Check/Start **MongoDB** (port 27017)
 2. ✅ Build & Start **Backend** (port 8081)
-3. ✅ Start **Frontend** (port 5173)
+3. ✅ Start **Frontend** (port 3000)
 
 ### Stop All Services
 
@@ -27,20 +27,60 @@ Stops backend and frontend (keeps MongoDB running).
 
 | Service  | Port | URL |
 |----------|------|-----|
-| Frontend | 5173 | http://localhost:5173 |
+| Frontend | 3000 | http://localhost:3000 |
 | Backend  | 8081 | http://localhost:8081 |
 | Swagger  | 8081 | http://localhost:8081/swagger-ui/index.html |
 | MongoDB  | 27017 | mongodb://localhost:27017 |
 
 ## 🔧 Features
 
+- **MongoDB Auto-Setup**: Interactive prompt with 3 options (Homebrew, Docker, Manual)
+- **Docker Support**: Automatically pulls and runs MongoDB container if not installed
 - **Automatic Port Checking**: Detects if services are already running
 - **Smart Restart**: Asks before killing existing services
-- **MongoDB Management**: Auto-starts MongoDB via Homebrew
 - **Build Progress**: Shows real-time Maven build progress
 - **Health Checks**: Waits for services to be fully started
 - **Colored Output**: Clear visual status indicators
 - **Log Files**: All output saved to `/tmp/kitchensink-*.log`
+
+## 🐳 MongoDB Setup Options
+
+When you run `./start-all.sh`, if MongoDB is not running, you'll see:
+
+```
+MongoDB Setup Options:
+  1. Start existing MongoDB (Homebrew)
+  2. Start MongoDB with Docker (recommended if not installed)
+  3. Exit and install MongoDB manually
+
+Choose option (1/2/3):
+```
+
+### Option 1: Homebrew (macOS)
+- Starts MongoDB installed via `brew install mongodb-community`
+- Best for: macOS users with MongoDB already installed
+
+### Option 2: Docker ⭐ **Recommended for First-Time Users**
+- Automatically pulls `mongo:7.0` Docker image (if needed)
+- Creates container named `mongodb` with persistent volume
+- No manual MongoDB installation required!
+- Works on **macOS, Linux, and Windows** (with Docker Desktop)
+
+**First run:**
+```bash
+# Pulls MongoDB image and creates container
+docker run -d --name mongodb -p 27017:27017 -v mongodb_data:/data/db mongo:7.0
+```
+
+**Subsequent runs:**
+```bash
+# Reuses existing container and data
+docker start mongodb
+```
+
+### Option 3: Manual Installation
+- Displays installation instructions for your platform
+- Exits script so you can install MongoDB first
 
 ## 📝 Log Files
 
