@@ -36,7 +36,9 @@ A modernized version of the classic JBoss EAP Kitchensink application, migrated 
 - **Java 21** (JDK 21.0.9 or higher recommended)
 - **Maven 3.8+**
 - **MongoDB 6.0+** (see installation guide below)
-- **Node.js 18+** (for frontend)
+- **Node.js 18+** ⚠️ **REQUIRED for frontend** - [Download here](https://nodejs.org/)
+  - Check version: `node -v` (should show v18.x or higher)
+  - Older versions (v12, v14, v16) will fail with "Unexpected token" errors
 
 #### Installing MongoDB
 
@@ -173,8 +175,8 @@ The frontend starts on **http://localhost:3000**
 
 | Username | Password | Role | Permissions |
 |----------|----------|------|-------------|
-| `admin` | `admin123` | ADMIN | Full access to all features |
-| `user` | `user12345` | USER | Read, Create, Update members |
+| `admin` | `Admin@2024` | ADMIN | Full access to all features |
+| `user` | `User@2024` | USER | Read, Create, Update members |
 
 ### Login Example
 
@@ -182,7 +184,7 @@ The frontend starts on **http://localhost:3000**
 # Get JWT token
 curl -X POST http://localhost:8081/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username": "admin", "password": "admin123"}'
+  -d '{"username": "admin", "password": "Admin@2024"}'
 
 # Response:
 # {

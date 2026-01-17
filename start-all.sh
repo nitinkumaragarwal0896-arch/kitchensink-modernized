@@ -76,10 +76,42 @@ echo -e "${BLUE}========================================${NC}"
 echo ""
 
 # Check Java version
-echo -e "${YELLOW}Java Version Check:${NC}"
+echo -e "${YELLOW}Prerequisites Check:${NC}"
 JAVA_VERSION=$(java -version 2>&1 | head -n 1 | awk -F '"' '{print $2}')
-print_status "info" "Using Java: $JAVA_VERSION"
+print_status "info" "Java: $JAVA_VERSION"
 print_status "info" "JAVA_HOME: $JAVA_HOME"
+
+# Check Node.js version (if frontend will be used)
+if [ -n "$FRONTEND_DIR" ] && [ -d "$FRONTEND_DIR" ]; then
+    if command -v node &> /dev/null; then
+        NODE_VERSION=$(node -v)
+        NODE_MAJOR=$(node -v | cut -d'.' -f1 | sed 's/v//')
+        
+        if [ "$NODE_MAJOR" -lt 18 ]; then
+            print_status "error" "Node.js: $NODE_VERSION (requires v18 or higher)"
+            echo -e "${RED}Frontend requires Node.js 18+${NC}"
+            echo -e "${YELLOW}Install Node.js 18+ from: https://nodejs.org${NC}"
+            echo -e "${YELLOW}Or use nvm: nvm install 18${NC}"
+            echo ""
+            echo -e "${BLUE}Options:${NC}"
+            echo "  1. Continue without frontend (backend-only mode)"
+            echo "  2. Exit and upgrade Node.js"
+            read -p "Choose option (1/2): " -n 1 -r
+            echo ""
+            if [[ $REPLY == "2" ]]; then
+                exit 1
+            else
+                print_status "warning" "Continuing in backend-only mode"
+                FRONTEND_DIR=""
+            fi
+        else
+            print_status "info" "Node.js: $NODE_VERSION ✓"
+        fi
+    else
+        print_status "warning" "Node.js not found (frontend will be skipped)"
+        FRONTEND_DIR=""
+    fi
+fi
 echo ""
 
 # Step 1: Check MongoDB
