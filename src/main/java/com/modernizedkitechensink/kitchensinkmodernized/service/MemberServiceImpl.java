@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -55,24 +56,40 @@ public class MemberServiceImpl implements IMemberService {
    * Register new member.
    * Evicts the "all" cache since the list has changed.
    * Puts the new member into cache.
+   * 
+   * Race Condition Protection:
+   * - Application-level check (line 64-66): Provides fast fail with clear error
+   * - Database unique index: Ultimate protection against concurrent inserts
+   * - Catches DuplicateKeyException from MongoDB if race condition occurs
    */
   @Override
   @CacheEvict(value = "members", key = "'all'")
   public Member register(Member member) {
     log.info("Registering new member: {}", member.getName());
 
+    // Application-level check (fast path)
     if (memberRepository.findByEmail(member.getEmail()).isPresent()) {
       throw new DuplicateEmailException(member.getEmail());
     }
 
-    Member saved = memberRepository.save(member);
-    log.info("Member registered with id: {}", saved.getId());
-    return saved;
+    try {
+      Member saved = memberRepository.save(member);
+      log.info("Member registered with id: {}", saved.getId());
+      return saved;
+    } catch (DuplicateKeyException e) {
+      // Race condition: Another thread/session saved the same email between check and save
+      log.warn("Race condition detected: duplicate email {} during concurrent registration", member.getEmail());
+      throw new DuplicateEmailException(member.getEmail());
+    }
   }
 
   /**
    * Update member.
    * Evicts both the specific member cache and the "all" list cache.
+   * 
+   * Race Condition Protection:
+   * - Checks email uniqueness before updating
+   * - Catches DuplicateKeyException if concurrent update creates conflict
    */
   @Override
   @CacheEvict(value = "members", allEntries = true)
@@ -82,6 +99,7 @@ public class MemberServiceImpl implements IMemberService {
     Member existingMember = memberRepository.findById(id)
       .orElseThrow(() -> new MemberNotFoundException(id));
 
+    // Check email uniqueness if email is changing
     if (!existingMember.getEmail().equals(memberData.getEmail())) {
       Optional<Member> memberWithEmail = memberRepository.findByEmail(memberData.getEmail());
       if (memberWithEmail.isPresent() && !memberWithEmail.get().getId().equals(id)) {
@@ -93,9 +111,15 @@ public class MemberServiceImpl implements IMemberService {
     existingMember.setEmail(memberData.getEmail());
     existingMember.setPhoneNumber(memberData.getPhoneNumber());
 
-    Member updated = memberRepository.save(existingMember);
-    log.info("Member updated: {}", updated.getId());
-    return updated;
+    try {
+      Member updated = memberRepository.save(existingMember);
+      log.info("Member updated: {}", updated.getId());
+      return updated;
+    } catch (DuplicateKeyException e) {
+      // Race condition: Email became duplicate during update
+      log.warn("Race condition detected: duplicate email {} during concurrent update", memberData.getEmail());
+      throw new DuplicateEmailException(memberData.getEmail());
+    }
   }
 
   /**

@@ -4,10 +4,12 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -39,27 +41,59 @@ public class Role {
 
   private String description;  // Human-readable description
 
+  /**
+   * Permissions stored as strings (e.g., "member:read", "system:admin").
+   * This avoids MongoDB conversion issues.
+   */
   @Builder.Default
-  private Set<Permission> permissions = new HashSet<>();
+  private Set<String> permissions = new HashSet<>();
+
+  @CreatedDate
+  private LocalDateTime createdAt;
+
+  /**
+   * Get permissions as Permission enums (for Java code).
+   */
+  public Set<Permission> getPermissionsAsEnums() {
+    Set<Permission> result = new HashSet<>();
+    for (String p : permissions) {
+      try {
+        result.add(Permission.fromString(p));
+      } catch (IllegalArgumentException e) {
+        // Skip invalid permissions
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Set permissions from Permission enums (converts to strings for storage).
+   */
+  public void setPermissionsFromEnums(Set<Permission> perms) {
+    this.permissions = new HashSet<>();
+    for (Permission p : perms) {
+      this.permissions.add(p.getPermission());
+    }
+  }
 
   /**
    * Convenience method to check if role has a specific permission.
    */
   public boolean hasPermission(Permission permission) {
-    return permissions.contains(permission);
+    return permissions.contains(permission.getPermission());
   }
 
   /**
    * Add a permission to this role.
    */
   public void addPermission(Permission permission) {
-    permissions.add(permission);
+    permissions.add(permission.getPermission());
   }
 
   /**
    * Remove a permission from this role.
    */
   public void removePermission(Permission permission) {
-    permissions.remove(permission);
+    permissions.remove(permission.getPermission());
   }
 }

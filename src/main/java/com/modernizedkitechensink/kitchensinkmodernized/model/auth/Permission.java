@@ -45,4 +45,17 @@ public enum Permission {
   public String getPermission() {
     return permission;
   }
+
+  /**
+   * Convert permission string (e.g., "member:read") back to enum.
+   * Used when creating/updating roles from API requests.
+   */
+  public static Permission fromString(String permissionString) {
+    for (Permission p : Permission.values()) {
+      if (p.permission.equals(permissionString)) {
+        return p;
+      }
+    }
+    throw new IllegalArgumentException("Unknown permission: " + permissionString);
+  }
 }

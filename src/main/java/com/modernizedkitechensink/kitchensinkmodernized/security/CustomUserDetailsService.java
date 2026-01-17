@@ -41,8 +41,8 @@ public class CustomUserDetailsService implements UserDetailsService {
     //Convert our Permissions to Spring Security's GrantedAuthority
     // This flattens: User → Roles → Permissions into a single list
     List<SimpleGrantedAuthority> authorities = user.getRoles().stream()
-      .flatMap(role -> role.getPermissions().stream())  // Get all permissions from all roles
-      .map(permission -> new SimpleGrantedAuthority(permission.getPermission()))
+      .flatMap(role -> role.getPermissions().stream())  // Get all permission strings from all roles
+      .map(SimpleGrantedAuthority::new)  // Permission strings are already in "member:read" format
       .collect(Collectors.toList());
 
     //Build and return Spring Security's UserDetails

@@ -51,22 +51,22 @@ public class DataInitializer implements CommandLineRunner {
       Role adminRole = Role.builder()
         .name("ADMIN")
         .description("Full system access")
-        .permissions(Set.of(
-          Permission.MEMBER_CREATE,
-          Permission.MEMBER_READ,
-          Permission.MEMBER_UPDATE,
-          Permission.MEMBER_DELETE,
-          Permission.USER_CREATE,
-          Permission.USER_READ,
-          Permission.USER_UPDATE,
-          Permission.USER_DELETE,
-          Permission.ROLE_CREATE,
-          Permission.ROLE_READ,
-          Permission.ROLE_UPDATE,
-          Permission.ROLE_DELETE,
-          Permission.SYSTEM_ADMIN
-        ))
         .build();
+      adminRole.setPermissionsFromEnums(Set.of(
+        Permission.MEMBER_CREATE,
+        Permission.MEMBER_READ,
+        Permission.MEMBER_UPDATE,
+        Permission.MEMBER_DELETE,
+        Permission.USER_CREATE,
+        Permission.USER_READ,
+        Permission.USER_UPDATE,
+        Permission.USER_DELETE,
+        Permission.ROLE_CREATE,
+        Permission.ROLE_READ,
+        Permission.ROLE_UPDATE,
+        Permission.ROLE_DELETE,
+        Permission.SYSTEM_ADMIN
+      ));
       roleRepository.save(adminRole);
       log.info("✓ Created ADMIN role");
     }
@@ -76,12 +76,12 @@ public class DataInitializer implements CommandLineRunner {
       Role userRole = Role.builder()
         .name("USER")
         .description("Standard user access")
-        .permissions(Set.of(
-          Permission.MEMBER_CREATE,
-          Permission.MEMBER_READ,
-          Permission.MEMBER_UPDATE
-        ))
         .build();
+      userRole.setPermissionsFromEnums(Set.of(
+        Permission.MEMBER_CREATE,
+        Permission.MEMBER_READ,
+        Permission.MEMBER_UPDATE
+      ));
       roleRepository.save(userRole);
       log.info("✓ Created USER role");
     }
@@ -91,10 +91,10 @@ public class DataInitializer implements CommandLineRunner {
       Role viewerRole = Role.builder()
         .name("VIEWER")
         .description("Read-only access")
-        .permissions(Set.of(
-          Permission.MEMBER_READ
-        ))
         .build();
+      viewerRole.setPermissionsFromEnums(Set.of(
+        Permission.MEMBER_READ
+      ));
       roleRepository.save(viewerRole);
       log.info("✓ Created VIEWER role");
     }

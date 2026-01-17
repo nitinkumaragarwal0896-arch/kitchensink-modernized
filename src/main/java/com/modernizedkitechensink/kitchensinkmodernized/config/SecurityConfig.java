@@ -62,7 +62,9 @@ public class SecurityConfig {
       .authorizeHttpRequests(auth -> auth
         // Public endpoints - no authentication required
         .requestMatchers(
-          "/api/v1/auth/**",      // Login, register, refresh
+          "/api/v1/auth/login",    // Login
+          "/api/v1/auth/register", // Register
+          "/api/v1/auth/refresh",  // Refresh token
           "/swagger-ui/**",        // Swagger UI
           "/swagger-ui.html",
           "/v3/api-docs/**",       // OpenAPI docs

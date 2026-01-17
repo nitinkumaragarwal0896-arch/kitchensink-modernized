@@ -1,36 +1,33 @@
-# Compiled class files
+HELP.md
 target/
-*.class
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
 
-# Log files
-*.log
-logs/
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
 
-# IDE
-.idea/
+### IntelliJ IDEA ###
+.idea
+*.iws
 *.iml
 *.ipr
-*.iws
-.vscode/
-*.swp
 
-# Maven
-.mvn/
-mvnw
-mvnw.cmd
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Environment
-.env
-*.env.local
-
-# Build
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
 build/
-out/
+!**/src/main/**/build/
+!**/src/test/**/build/
 
-# Test coverage
-coverage/
-*.exec
+### VS Code ###
+.vscode/
