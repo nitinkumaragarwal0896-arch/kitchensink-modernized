@@ -74,9 +74,15 @@ Download and install from [MongoDB Download Center](https://www.mongodb.com/try/
 
 ### 🎯 One-Command Startup (Recommended)
 
-Start MongoDB, backend, and frontend with a single command:
+**Prerequisites:** Both backend and frontend repos must be cloned:
 
 ```bash
+# Clone both repositories
+git clone https://github.com/nitinkumaragarwal0896-arch/kitchensink-modernized.git
+git clone https://github.com/nitinkumaragarwal0896-arch/kitchensink-frontend.git
+
+# Start everything from backend directory
+cd kitchensink-modernized
 ./start-all.sh
 ```
 
@@ -88,12 +94,22 @@ Start MongoDB, backend, and frontend with a single command:
    - Option 3: Exit and install manually
 3. ✅ Build the backend (Maven)
 4. ✅ Start Spring Boot backend on port 8081
-5. ✅ Start React frontend on port 3000
+5. ✅ **Automatically finds and starts the frontend** (checks `../kitchensink-frontend`)
 6. ✅ Display URLs and credentials
 
 **First-time users without MongoDB:**
 - Choose **Option 2** when prompted - it will automatically pull and start MongoDB in Docker
 - No manual MongoDB installation needed!
+
+**Note on directory structure:**
+The script expects this directory structure:
+```
+parent-folder/
+├── kitchensink-modernized/     (backend - clone this first)
+└── kitchensink-frontend/       (frontend - clone this second)
+```
+
+If your frontend is in a different location, the script will prompt you for the path.
 
 **Stop all services:**
 ```bash

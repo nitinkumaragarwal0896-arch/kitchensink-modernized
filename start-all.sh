@@ -16,9 +16,34 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# Directories
-BACKEND_DIR="/Users/nitina/IdeaProjects/kitchensink-modernized"
-FRONTEND_DIR="/Users/nitina/IdeaProjects/kitchensink-spring-mongodb/frontend"
+# Directories - Automatically detect based on script location
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BACKEND_DIR="$SCRIPT_DIR"
+
+# Try to find frontend in common locations
+if [ -d "$SCRIPT_DIR/../kitchensink-frontend" ]; then
+    FRONTEND_DIR="$SCRIPT_DIR/../kitchensink-frontend"
+elif [ -d "$SCRIPT_DIR/../kitchensink-spring-mongodb/frontend" ]; then
+    FRONTEND_DIR="$SCRIPT_DIR/../kitchensink-spring-mongodb/frontend"
+else
+    FRONTEND_DIR=""
+fi
+
+# If frontend not found, prompt user
+if [ -z "$FRONTEND_DIR" ] || [ ! -d "$FRONTEND_DIR" ]; then
+    echo -e "${YELLOW}⚠ Frontend directory not found automatically${NC}"
+    echo -e "${BLUE}Checked locations:${NC}"
+    echo "  - $SCRIPT_DIR/../kitchensink-frontend"
+    echo "  - $SCRIPT_DIR/../kitchensink-spring-mongodb/frontend"
+    echo ""
+    echo -e "${BLUE}Please enter the full path to the frontend directory:${NC}"
+    read -r FRONTEND_DIR
+    if [ ! -d "$FRONTEND_DIR" ]; then
+        echo -e "${RED}✗ Frontend directory not found at: $FRONTEND_DIR${NC}"
+        echo -e "${YELLOW}Continuing without frontend (backend-only mode)${NC}"
+        FRONTEND_DIR=""
+    fi
+fi
 
 # Function to check if a port is in use
 check_port() {
@@ -223,69 +248,78 @@ fi
 echo ""
 
 # Step 3: Start Frontend (React)
-echo -e "${YELLOW}[3/3] Starting Frontend (React on port 3000)...${NC}"
-
-# Check if frontend is already running
-if check_port 3000; then
-    print_status "warning" "Frontend is already running on port 3000"
-    read -p "Kill and restart? (y/n): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        print_status "info" "Stopping existing frontend..."
-        lsof -ti:3000 | xargs kill -9 2>/dev/null || true
-        sleep 2
-    else
-        print_status "info" "Keeping existing frontend"
-    fi
-fi
-
-if ! check_port 3000; then
-    print_status "info" "Starting frontend development server..."
-    cd "$FRONTEND_DIR"
+if [ -n "$FRONTEND_DIR" ] && [ -d "$FRONTEND_DIR" ]; then
+    echo -e "${YELLOW}[3/3] Starting Frontend (React on port 3000)...${NC}"
     
-    # Check if node_modules exists
-    if [ ! -d "node_modules" ]; then
-        print_status "warning" "node_modules not found. Running npm install..."
-        npm install > /tmp/kitchensink-frontend-install.log 2>&1
-        if [ $? -eq 0 ]; then
-            print_status "success" "Dependencies installed"
+    # Check if frontend is already running
+    if check_port 3000; then
+        print_status "warning" "Frontend is already running on port 3000"
+        read -p "Kill and restart? (y/n): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            print_status "info" "Stopping existing frontend..."
+            lsof -ti:3000 | xargs kill -9 2>/dev/null || true
+            sleep 2
         else
-            print_status "error" "npm install failed"
-            echo -e "${RED}Check logs: cat /tmp/kitchensink-frontend-install.log${NC}"
-            exit 1
+            print_status "info" "Keeping existing frontend"
         fi
     fi
     
-    # Start frontend
-    nohup npm run dev > /tmp/kitchensink-frontend.log 2>&1 &
-    FRONTEND_PID=$!
-    
-    # Wait for frontend to start
-    print_status "info" "Waiting for frontend to start..."
-    for i in {1..20}; do
-        if check_port 3000; then
-            print_status "success" "Frontend started successfully (PID: $FRONTEND_PID)"
-            echo -e "${GREEN}   → Frontend running at: http://localhost:3000${NC}"
-            echo -e "${GREEN}   → Logs: tail -f /tmp/kitchensink-frontend.log${NC}"
-            break
+    if ! check_port 3000; then
+        print_status "info" "Starting frontend development server..."
+        cd "$FRONTEND_DIR"
+        
+        # Check if node_modules exists
+        if [ ! -d "node_modules" ]; then
+            print_status "warning" "node_modules not found. Running npm install..."
+            npm install > /tmp/kitchensink-frontend-install.log 2>&1
+            if [ $? -eq 0 ]; then
+                print_status "success" "Dependencies installed"
+            else
+                print_status "error" "npm install failed"
+                echo -e "${RED}Check logs: cat /tmp/kitchensink-frontend-install.log${NC}"
+                exit 1
+            fi
         fi
-        sleep 1
-        if [ $i -eq 20 ]; then
-            print_status "error" "Frontend failed to start within 20 seconds"
-            echo -e "${RED}Check logs: tail -f /tmp/kitchensink-frontend.log${NC}"
-            exit 1
-        fi
-    done
+        
+        # Start frontend
+        nohup npm run dev > /tmp/kitchensink-frontend.log 2>&1 &
+        FRONTEND_PID=$!
+        
+        # Wait for frontend to start
+        print_status "info" "Waiting for frontend to start..."
+        for i in {1..20}; do
+            if check_port 3000; then
+                print_status "success" "Frontend started successfully (PID: $FRONTEND_PID)"
+                echo -e "${GREEN}   → Frontend running at: http://localhost:3000${NC}"
+                echo -e "${GREEN}   → Logs: tail -f /tmp/kitchensink-frontend.log${NC}"
+                break
+            fi
+            sleep 1
+            if [ $i -eq 20 ]; then
+                print_status "error" "Frontend failed to start within 20 seconds"
+                echo -e "${RED}Check logs: tail -f /tmp/kitchensink-frontend.log${NC}"
+                exit 1
+            fi
+        done
+    fi
+    echo ""
+else
+    echo -e "${YELLOW}[3/3] Skipping Frontend (not found)${NC}"
+    print_status "info" "Frontend directory not configured. Backend-only mode."
+    print_status "info" "To add frontend, clone: git clone https://github.com/nitinkumaragarwal0896-arch/kitchensink-frontend.git"
+    echo ""
 fi
-echo ""
 
 # Summary
 echo -e "${BLUE}========================================${NC}"
-echo -e "${GREEN}✓ All services started successfully!${NC}"
+echo -e "${GREEN}✓ Services started successfully!${NC}"
 echo -e "${BLUE}========================================${NC}"
 echo ""
 echo -e "${YELLOW}Service URLs:${NC}"
-echo -e "  ${BLUE}Frontend:${NC}       http://localhost:3000"
+if [ -n "$FRONTEND_DIR" ] && [ -d "$FRONTEND_DIR" ]; then
+    echo -e "  ${BLUE}Frontend:${NC}       http://localhost:3000"
+fi
 echo -e "  ${BLUE}Backend API:${NC}    http://localhost:8081"
 echo -e "  ${BLUE}Swagger UI:${NC}     http://localhost:8081/swagger-ui/index.html"
 echo -e "  ${BLUE}MongoDB:${NC}        mongodb://localhost:27017"
@@ -296,7 +330,9 @@ echo -e "  ${BLUE}User:${NC}   user / user12345"
 echo ""
 echo -e "${YELLOW}Logs:${NC}"
 echo -e "  ${BLUE}Backend:${NC}   tail -f /tmp/kitchensink-backend.log"
-echo -e "  ${BLUE}Frontend:${NC}  tail -f /tmp/kitchensink-frontend.log"
+if [ -n "$FRONTEND_DIR" ] && [ -d "$FRONTEND_DIR" ]; then
+    echo -e "  ${BLUE}Frontend:${NC}  tail -f /tmp/kitchensink-frontend.log"
+fi
 echo ""
 echo -e "${YELLOW}To stop all services:${NC}"
 echo -e "  ./stop-all.sh"
