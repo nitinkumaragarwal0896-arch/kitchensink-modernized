@@ -120,7 +120,7 @@ public class DataInitializer implements CommandLineRunner {
         .build();
 
       userRepository.save(admin);
-      log.info("✓ Created admin user (username: admin, password: admin123)");
+      log.info("✓ Created admin user (username: admin, password: Admin@2024)");
     }
 
     // Create a regular user for testing
@@ -140,7 +140,7 @@ public class DataInitializer implements CommandLineRunner {
         .build();
 
       userRepository.save(regularUser);
-      log.info("✓ Created regular user (username: user, password: user123)");
+      log.info("✓ Created regular user (username: user, password: User@2024)");
     }
   }
 
