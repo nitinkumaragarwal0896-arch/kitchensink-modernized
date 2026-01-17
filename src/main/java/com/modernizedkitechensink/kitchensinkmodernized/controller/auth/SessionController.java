@@ -2,6 +2,7 @@ package com.modernizedkitechensink.kitchensinkmodernized.controller.auth;
 
 import com.modernizedkitechensink.kitchensinkmodernized.model.auth.RefreshToken;
 import com.modernizedkitechensink.kitchensinkmodernized.model.auth.User;
+import com.modernizedkitechensink.kitchensinkmodernized.repository.RefreshTokenRepository;
 import com.modernizedkitechensink.kitchensinkmodernized.repository.UserRepository;
 import com.modernizedkitechensink.kitchensinkmodernized.service.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 /**
@@ -32,22 +34,38 @@ public class SessionController {
 
   private final RefreshTokenService refreshTokenService;
   private final UserRepository userRepository;
+  private final RefreshTokenRepository refreshTokenRepository;
 
   /**
    * Get all active sessions for current user.
    *
-   * GET /api/v1/sessions
+   * GET /api/v1/sessions?currentRefreshToken=xxx
    * Returns: List of active sessions with device info, IP, last activity
+   *          and marks which one is the "current" session
    */
   @GetMapping
   @PreAuthorize("isAuthenticated()")
-  public ResponseEntity<?> getActiveSessions(Authentication authentication) {
+  public ResponseEntity<?> getActiveSessions(
+    Authentication authentication,
+    @RequestParam(required = false) String currentRefreshToken
+  ) {
     String username = authentication.getName();
     User user = userRepository.findByUsername(username)
       .orElseThrow(() -> new RuntimeException("User not found"));
     
     List<RefreshToken> sessions = refreshTokenService.getActiveSessions(user);
     
+    // Identify current session by refresh token hash
+    String currentSessionId = null;
+    if (currentRefreshToken != null && !currentRefreshToken.isEmpty()) {
+      String tokenHash = refreshTokenService.hashToken(currentRefreshToken);
+      Optional<RefreshToken> currentToken = refreshTokenRepository.findByTokenHash(tokenHash);
+      if (currentToken.isPresent() && !currentToken.get().isRevoked()) {
+        currentSessionId = currentToken.get().getId();
+      }
+    }
+    
+    String finalCurrentSessionId = currentSessionId;
     List<Map<String, Object>> response = sessions.stream()
       .map(session -> {
         Map<String, Object> sessionMap = new HashMap<>();
@@ -57,30 +75,59 @@ public class SessionController {
         sessionMap.put("lastUsedAt", session.getLastUsedAt().toString());
         sessionMap.put("issuedAt", session.getIssuedAt().toString());
         sessionMap.put("expiresAt", session.getExpiresAt().toString());
+        sessionMap.put("isCurrent", session.getId().equals(finalCurrentSessionId));
         return sessionMap;
       })
       .collect(Collectors.toList());
     
-    log.info("Retrieved {} active sessions for user: {}", response.size(), username);
+    log.info("Retrieved {} active sessions for user: {} (current: {})", 
+             response.size(), username, currentSessionId);
     return ResponseEntity.ok(response);
   }
 
   /**
    * Revoke a specific session (logout from one device).
    *
-   * DELETE /api/v1/sessions/{sessionId}
+   * DELETE /api/v1/sessions/{sessionId}?currentRefreshToken=xxx
+   * 
+   * If the user revokes their current session:
+   * - Returns a flag indicating immediate logout is needed
+   * - Access token remains valid for up to 15 minutes, but refresh is blocked
    */
   @DeleteMapping("/{sessionId}")
   @PreAuthorize("isAuthenticated()")
   public ResponseEntity<?> revokeSession(
     @PathVariable String sessionId,
+    @RequestParam(required = false) String currentRefreshToken,
     Authentication authentication
   ) {
     String username = authentication.getName();
-    refreshTokenService.revokeToken(sessionId);
-    log.info("Session {} revoked by user: {}", sessionId, username);
     
-    return ResponseEntity.ok(Map.of("message", "Session revoked successfully"));
+    // Check if this is the current session
+    boolean isCurrentSession = false;
+    if (currentRefreshToken != null && !currentRefreshToken.isEmpty()) {
+      String tokenHash = refreshTokenService.hashToken(currentRefreshToken);
+      Optional<RefreshToken> currentToken = refreshTokenRepository.findByTokenHash(tokenHash);
+      if (currentToken.isPresent() && currentToken.get().getId().equals(sessionId)) {
+        isCurrentSession = true;
+      }
+    }
+    
+    refreshTokenService.revokeToken(sessionId);
+    
+    Map<String, Object> response = new HashMap<>();
+    response.put("message", "Session revoked successfully");
+    response.put("isCurrentSession", isCurrentSession);
+    
+    if (isCurrentSession) {
+      log.warn("User {} revoked their CURRENT session {} - Should logout immediately", 
+               username, sessionId);
+      response.put("warning", "You revoked your current session. Please logout now.");
+    } else {
+      log.info("User {} revoked session {} from another device", username, sessionId);
+    }
+    
+    return ResponseEntity.ok(response);
   }
 }
 

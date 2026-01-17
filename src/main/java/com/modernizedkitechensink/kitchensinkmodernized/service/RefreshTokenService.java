@@ -177,7 +177,11 @@ public class RefreshTokenService {
    * Hash a token using SHA-256.
    * We never store plain tokens - only their hashes.
    */
-  private String hashToken(String token) {
+  /**
+   * Hash a token using SHA-256.
+   * This is used for secure token storage - never store plain tokens in database!
+   */
+  public String hashToken(String token) {
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       byte[] hash = digest.digest(token.getBytes(StandardCharsets.UTF_8));
