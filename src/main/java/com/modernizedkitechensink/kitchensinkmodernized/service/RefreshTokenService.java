@@ -44,12 +44,13 @@ public class RefreshTokenService {
    * If user has too many active sessions, revoke the oldest one.
    *
    * @param token The JWT refresh token string
+   * @param accessToken The JWT access token string (for instant revocation)
    * @param user The user
    * @param request HTTP request for device/IP info
    * @return The saved RefreshToken entity
    */
   @Transactional
-  public RefreshToken createRefreshToken(String token, User user, HttpServletRequest request) {
+  public RefreshToken createRefreshToken(String token, String accessToken, User user, HttpServletRequest request) {
     log.info("Creating refresh token for user: {}", user.getUsername());
 
     // Check if user has too many active sessions
@@ -67,12 +68,14 @@ public class RefreshTokenService {
     String deviceInfo = extractDeviceInfo(request);
     String ipAddress = extractIpAddress(request);
 
-    // Hash the token (NEVER store plain tokens!)
+    // Hash the tokens (NEVER store plain tokens!)
     String tokenHash = hashToken(token);
+    String accessTokenHash = hashToken(accessToken);
 
     // Create and save the refresh token
     RefreshToken refreshToken = RefreshToken.builder()
       .tokenHash(tokenHash)
+      .accessTokenHash(accessTokenHash)  // NEW: Store access token hash for instant revocation
       .user(user)
       .deviceInfo(deviceInfo)
       .ipAddress(ipAddress)
@@ -105,6 +108,21 @@ public class RefreshTokenService {
         return refreshTokenRepository.save(rt);
       })
       .orElse(null);
+  }
+
+  /**
+   * Update the access token hash for a refresh token.
+   * Called when access token is refreshed - allows instant revocation of the new token.
+   *
+   * @param refreshToken The RefreshToken entity
+   * @param newAccessToken The new JWT access token string
+   */
+  @Transactional
+  public void updateAccessTokenHash(RefreshToken refreshToken, String newAccessToken) {
+    String newAccessTokenHash = hashToken(newAccessToken);
+    refreshToken.setAccessTokenHash(newAccessTokenHash);
+    refreshTokenRepository.save(refreshToken);
+    log.debug("Updated access token hash for session: {}", refreshToken.getId());
   }
 
   /**

@@ -54,6 +54,13 @@ public class RefreshToken {
   private String tokenHash;
 
   /**
+   * SHA-256 hash of the access token associated with this refresh token.
+   * Used for instant revocation when session is deleted from another device.
+   * Without this, revoked sessions can still make API calls for 15 minutes!
+   */
+  private String accessTokenHash;
+
+  /**
    * User who owns this token.
    */
   @DBRef

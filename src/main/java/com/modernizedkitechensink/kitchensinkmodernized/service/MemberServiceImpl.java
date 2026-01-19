@@ -9,6 +9,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.dao.DuplicateKeyException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -38,6 +40,23 @@ public class MemberServiceImpl implements IMemberService {
   public List<Member> findAll() {
     log.debug("Cache MISS - fetching all members from database");
     return memberRepository.findAllByOrderByNameAsc();
+  }
+
+  /**
+   * Find all members with pagination - NO CACHING for now.
+   * 
+   * TODO: Fix Redis serialization for Page<Member> objects.
+   * Spring Data's Page interface is not directly serializable by Redis JSON serializer.
+   * For production, we'd either:
+   * 1. Convert Page to a custom DTO before caching
+   * 2. Use a different cache serialization strategy
+   * 3. Cache the content list separately from the pagination metadata
+   */
+  @Override
+  // @Cacheable(value = "members", key = "'page:' + #pageable.pageNumber + ':size:' + #pageable.pageSize")
+  public Page<Member> findAll(Pageable pageable) {
+    log.debug("Fetching members page {} from database (caching disabled)", pageable.getPageNumber());
+    return memberRepository.findAll(pageable);
   }
 
   /**

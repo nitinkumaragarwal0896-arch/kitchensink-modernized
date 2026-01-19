@@ -1,5 +1,6 @@
 package com.modernizedkitechensink.kitchensinkmodernized.security;
 
+import com.modernizedkitechensink.kitchensinkmodernized.service.TokenBlacklistService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -31,6 +32,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
   private final JwtTokenProvider jwtTokenProvider;
   private final UserDetailsService userDetailsService;
+  private final TokenBlacklistService blacklistService;
 
   /**
    * Core filter logic - executed for EVERY HTTP request.
@@ -46,8 +48,22 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       //Extract JWT from the Authorization header
       String jwt = extractJwtFromRequest(request);
 
-      //Validate token and set authentication
-      if (StringUtils.hasText(jwt) && jwtTokenProvider.validateToken(jwt)) {
+      if (StringUtils.hasText(jwt)) {
+        
+        // ✅ INSTANT LOGOUT: Check Redis blacklist FIRST (before expensive validation)
+        if (blacklistService.isBlacklisted(jwt)) {
+          log.warn("🚫 Blacklisted token detected: {}", 
+            jwt.substring(0, Math.min(20, jwt.length())) + "...");
+          response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+          response.setContentType("application/json");
+          response.getWriter().write(
+            "{\"error\":\"Token has been revoked\",\"message\":\"Please log in again\"}"
+          );
+          return; // Stop processing immediately - reject the request!
+        }
+        
+        //Validate token signature and expiration
+        if (jwtTokenProvider.validateToken(jwt)) {
 
         //Get username from token
         String username = jwtTokenProvider.getUsernameFromToken(jwt);
@@ -73,6 +89,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
         log.debug("Authenticated user: {}", username);
+        }
       }
     } catch (Exception ex) {
       log.error("Could not set user authentication: {}", ex.getMessage());

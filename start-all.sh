@@ -115,7 +115,7 @@ fi
 echo ""
 
 # Step 1: Check MongoDB
-echo -e "${YELLOW}[1/3] Checking MongoDB...${NC}"
+echo -e "${YELLOW}[1/4] Checking MongoDB...${NC}"
 if check_port 27017; then
     print_status "success" "MongoDB is already running on port 27017"
 else
@@ -208,8 +208,90 @@ else
 fi
 echo ""
 
-# Step 2: Start Backend (Spring Boot)
-echo -e "${YELLOW}[2/3] Starting Backend (Spring Boot on port 8081)...${NC}"
+# Step 2: Check Redis
+echo -e "${YELLOW}[2/4] Checking Redis...${NC}"
+if check_port 6379; then
+    print_status "success" "Redis is already running on port 6379"
+else
+    print_status "warning" "Redis is not running on port 6379"
+    echo ""
+    echo -e "${BLUE}Redis Setup Options:${NC}"
+    echo "  1. Start existing Redis (Homebrew)"
+    echo "  2. Start Redis with Docker (recommended if not installed)"
+    echo "  3. Skip Redis (backend will work but features limited)"
+    echo ""
+    read -p "Choose option (1/2/3): " -n 1 -r
+    echo ""
+    
+    if [[ $REPLY == "1" ]]; then
+        print_status "info" "Attempting to start Redis via Homebrew..."
+        
+        if command -v brew &> /dev/null; then
+            if brew services list | grep -q "redis"; then
+                brew services start redis &> /dev/null || brew services restart redis &> /dev/null
+                sleep 2
+                
+                if check_port 6379; then
+                    print_status "success" "Redis started successfully"
+                else
+                    print_status "error" "Failed to start Redis"
+                    echo -e "${YELLOW}Try manually: brew services start redis${NC}"
+                    exit 1
+                fi
+            else
+                print_status "error" "Redis not installed via Homebrew"
+                echo -e "${YELLOW}Install with: brew install redis${NC}"
+                exit 1
+            fi
+        else
+            print_status "error" "Homebrew not found"
+            echo -e "${YELLOW}Install Homebrew: https://brew.sh${NC}"
+            exit 1
+        fi
+        
+    elif [[ $REPLY == "2" ]]; then
+        print_status "info" "Starting Redis with Docker..."
+        
+        if command -v docker &> /dev/null; then
+            # Check if redis container already exists
+            if docker ps -a --format '{{.Names}}' | grep -q "^redis$"; then
+                print_status "info" "Redis container exists, starting..."
+                docker start redis &> /dev/null
+            else
+                print_status "info" "Creating new Redis container..."
+                docker run -d --name redis -p 6379:6379 \
+                    -v redis_data:/data \
+                    redis:7-alpine &> /dev/null
+            fi
+            
+            # Wait for Redis to be ready
+            print_status "info" "Waiting for Redis to be ready..."
+            for i in {1..10}; do
+                if check_port 6379; then
+                    print_status "success" "Redis started successfully in Docker"
+                    break
+                fi
+                sleep 1
+                if [ $i -eq 10 ]; then
+                    print_status "error" "Redis failed to start within 10 seconds"
+                    exit 1
+                fi
+            done
+        else
+            print_status "error" "Docker not found"
+            echo -e "${YELLOW}Install Docker: https://docs.docker.com/get-docker/${NC}"
+            exit 1
+        fi
+        
+    else
+        print_status "warning" "Skipping Redis. Features like distributed caching and instant logout won't work."
+        echo -e "${YELLOW}Note: Backend will fall back to local cache${NC}"
+    fi
+fi
+echo ""
+
+# Step 3: Start Backend (Spring Boot)
+echo -e "${YELLOW}[3/4] Starting Backend (Spring Boot on port 8081)...${NC}"
 
 # Check if backend is already running
 if check_port 8081; then
@@ -279,9 +361,9 @@ if ! check_port 8081; then
 fi
 echo ""
 
-# Step 3: Start Frontend (React)
+# Step 4: Start Frontend (React)
 if [ -n "$FRONTEND_DIR" ] && [ -d "$FRONTEND_DIR" ]; then
-    echo -e "${YELLOW}[3/3] Starting Frontend (React on port 3000)...${NC}"
+    echo -e "${YELLOW}[4/4] Starting Frontend (React on port 3000)...${NC}"
     
     # Check if frontend is already running
     if check_port 3000; then

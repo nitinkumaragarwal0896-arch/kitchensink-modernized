@@ -67,7 +67,7 @@ public class AuthController {
 
       // Step 3: Store refresh token in database (tracks session)
       User user = userRepository.findByUsername(request.getUsername()).orElseThrow();
-      refreshTokenService.createRefreshToken(refreshToken, user, httpRequest);
+      refreshTokenService.createRefreshToken(refreshToken, accessToken, user, httpRequest);
 
       // Step 4: Update last login time
       user.recordSuccessfulLogin();
@@ -169,6 +169,9 @@ public class AuthController {
     );
 
     String newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
+
+    // Update the access token hash in the refresh token (for instant revocation)
+    refreshTokenService.updateAccessTokenHash(storedToken, newAccessToken);
 
     return ResponseEntity.ok(Map.of(
       "accessToken", newAccessToken,

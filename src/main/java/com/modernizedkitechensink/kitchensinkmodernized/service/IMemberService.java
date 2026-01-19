@@ -1,6 +1,8 @@
 package com.modernizedkitechensink.kitchensinkmodernized.service;
 
 import com.modernizedkitechensink.kitchensinkmodernized.model.Member;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 
 import java.util.List;
 
@@ -10,6 +12,13 @@ public interface IMemberService {
    * Find all members, ordered by name.
    */
   List<Member> findAll();
+
+  /**
+   * Find all members with pagination and sorting.
+   * @param pageable Pagination and sorting parameters
+   * @return Page of members
+   */
+  Page<Member> findAll(Pageable pageable);
 
   /**
    * Find member by ID.

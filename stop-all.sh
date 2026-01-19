@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Kitchensink Modernized - Stop Script
-# This script stops Backend and Frontend (keeps MongoDB running)
+# This script stops Backend and Frontend (keeps MongoDB and Redis running)
 
 # Colors for output
 RED='\033[0;31m'
@@ -49,6 +49,8 @@ fi
 echo ""
 echo -e "${GREEN}All services stopped!${NC}"
 echo ""
-echo -e "${YELLOW}Note:${NC} MongoDB is still running (use 'brew services stop mongodb-community' to stop it)"
+echo -e "${YELLOW}Note:${NC} MongoDB and Redis are still running (database services left running)"
+echo -e "${BLUE}To stop MongoDB:${NC} brew services stop mongodb-community (or: docker stop mongodb)"
+echo -e "${BLUE}To stop Redis:${NC} brew services stop redis (or: docker stop redis)"
 echo ""
 

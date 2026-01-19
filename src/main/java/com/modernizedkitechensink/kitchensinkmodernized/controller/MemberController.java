@@ -5,11 +5,17 @@ import com.modernizedkitechensink.kitchensinkmodernized.service.IMemberService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * REST Controller for Member operations.
@@ -28,16 +34,66 @@ public class MemberController {
   private final IMemberService memberService;
 
   /**
-   * Get all members.
+   * Get all members with pagination.
    *
-   * GET /api/v1/members
+   * GET /api/v1/members?page=0&size=10&sort=name,asc
    * Required permission: member:read
+   *
+   * Query parameters:
+   * - page: Page number (0-indexed, default: 0)
+   * - size: Items per page (default: 10, max: 100)
+   * - sort: Sort field and direction (e.g., "name,asc", "email,desc")
+   *
+   * Response format:
+   * {
+   *   "content": [...],           // Array of members
+   *   "page": 0,                  // Current page number
+   *   "size": 10,                 // Items per page
+   *   "totalElements": 47,        // Total number of members
+   *   "totalPages": 5,            // Total number of pages
+   *   "first": true,              // Is this the first page?
+   *   "last": false               // Is this the last page?
+   * }
    */
   @GetMapping
   @PreAuthorize("hasAuthority('member:read')")
-  public List<Member> getAllMembers() {
-    log.debug("Fetching all members");
-    return memberService.findAll();
+  public ResponseEntity<Map<String, Object>> getAllMembers(
+    @RequestParam(defaultValue = "0") int page,
+    @RequestParam(defaultValue = "10") int size,
+    @RequestParam(defaultValue = "name,asc") String sort
+  ) {
+    log.debug("Fetching members: page={}, size={}, sort={}", page, size, sort);
+
+    // Validate and limit page size (max 100)
+    if (size > 100) {
+      size = 100;
+      log.warn("Page size limited to 100");
+    }
+
+    // Parse sort parameter (e.g., "name,asc" -> Sort.by("name").ascending())
+    String[] sortParams = sort.split(",");
+    String sortField = sortParams[0];
+    Sort.Direction sortDirection = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("desc")
+      ? Sort.Direction.DESC
+      : Sort.Direction.ASC;
+
+    // Create pageable request
+    Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortField));
+
+    // Fetch paginated data
+    Page<Member> memberPage = memberService.findAll(pageable);
+
+    // Build response with pagination metadata
+    Map<String, Object> response = new HashMap<>();
+    response.put("content", memberPage.getContent());
+    response.put("page", memberPage.getNumber());
+    response.put("size", memberPage.getSize());
+    response.put("totalElements", memberPage.getTotalElements());
+    response.put("totalPages", memberPage.getTotalPages());
+    response.put("first", memberPage.isFirst());
+    response.put("last", memberPage.isLast());
+
+    return ResponseEntity.ok(response);
   }
 
   /**
