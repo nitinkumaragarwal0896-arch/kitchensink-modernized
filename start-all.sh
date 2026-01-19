@@ -313,7 +313,7 @@ if ! check_port 8081; then
     
     # Build the project
     print_status "info" "Running Maven build (skipping tests)..."
-    mvn clean package -DskipTests > /tmp/kitchensink-backend-build.log 2>&1 &
+    mvn clean package -DskipTests -s settings-public.xml > /tmp/kitchensink-backend-build.log 2>&1 &
     BUILD_PID=$!
     
     # Show spinner while building

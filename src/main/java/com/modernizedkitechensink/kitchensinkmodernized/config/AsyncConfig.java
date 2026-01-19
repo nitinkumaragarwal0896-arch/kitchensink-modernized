@@ -3,18 +3,22 @@ package com.modernizedkitechensink.kitchensinkmodernized.config;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
 import java.util.concurrent.Executor;
 
 /**
- * Configuration for asynchronous task execution.
+ * Configuration for asynchronous task execution and scheduled tasks.
  *
  * Enables @Async annotation and configures the thread pool
- * used for background tasks like audit logging.
+ * used for background tasks like audit logging and bulk operations.
+ * 
+ * Also enables @Scheduled annotation for periodic tasks like job cleanup.
  */
 @Configuration
 @EnableAsync
+@EnableScheduling
 public class AsyncConfig {
 
   /**
