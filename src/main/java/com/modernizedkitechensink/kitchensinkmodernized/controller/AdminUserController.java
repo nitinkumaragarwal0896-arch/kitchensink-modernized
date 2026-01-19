@@ -121,7 +121,7 @@ public class AdminUserController {
   }
 
   /**
-   * Delete user.
+   * Delete user (only disabled users can be deleted for safety).
    */
   @DeleteMapping("/{id}")
   public ResponseEntity<?> deleteUser(@PathVariable String id) {
@@ -133,6 +133,12 @@ public class AdminUserController {
 
     return userRepository.findById(id)
       .map(user -> {
+        // Only allow deletion of disabled users (safety measure)
+        if (user.isEnabled()) {
+          return ResponseEntity.badRequest()
+            .body(Map.of("error", "Cannot delete an enabled user. Please disable the user first."));
+        }
+
         // Prevent deletion of the last admin
         boolean isAdmin = user.getRoles().stream()
           .anyMatch(role -> role.getName().equals("ADMIN"));
@@ -149,6 +155,7 @@ public class AdminUserController {
           }
         }
 
+        // Delete user
         userRepository.delete(user);
         log.info("User deleted: {}", user.getUsername());
 

@@ -50,5 +50,12 @@ public interface RefreshTokenRepository extends MongoRepository<RefreshToken, St
    * MongoDB TTL index handles this automatically, but this is for manual cleanup if needed.
    */
   void deleteByExpiresAtBefore(LocalDateTime date);
+
+  /**
+   * Find all active (non-revoked) tokens for a user by user ID.
+   * Used for blacklisting all tokens when password changes.
+   * Note: Uses nested property query (user.id) since RefreshToken has @DBRef User.
+   */
+  List<RefreshToken> findByUser_IdAndRevokedFalse(String userId);
 }
 

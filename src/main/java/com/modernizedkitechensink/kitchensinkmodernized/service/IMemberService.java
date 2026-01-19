@@ -21,6 +21,14 @@ public interface IMemberService {
   Page<Member> findAll(Pageable pageable);
 
   /**
+   * Search members by name, email, or phone number.
+   * @param searchTerm The search term (case-insensitive)
+   * @param pageable Pagination and sorting parameters
+   * @return Page of matching members
+   */
+  Page<Member> searchMembers(String searchTerm, Pageable pageable);
+
+  /**
    * Find member by ID.
    * @throws MemberNotFoundException if not found
    */

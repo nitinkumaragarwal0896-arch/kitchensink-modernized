@@ -10,6 +10,8 @@ import com.modernizedkitechensink.kitchensinkmodernized.repository.RoleRepositor
 import com.modernizedkitechensink.kitchensinkmodernized.repository.UserRepository;
 import com.modernizedkitechensink.kitchensinkmodernized.security.JwtTokenProvider;
 import com.modernizedkitechensink.kitchensinkmodernized.service.RefreshTokenService;
+import com.modernizedkitechensink.kitchensinkmodernized.validation.EmailValidationService;
+import com.modernizedkitechensink.kitchensinkmodernized.validation.PhoneValidationService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -43,6 +45,10 @@ public class AuthController {
   private final RoleRepository roleRepository;
   private final PasswordEncoder passwordEncoder;
   private final RefreshTokenService refreshTokenService;
+  private final EmailValidationService emailValidationService;
+  private final PhoneValidationService phoneValidationService;
+  private final com.modernizedkitechensink.kitchensinkmodernized.service.PasswordResetService passwordResetService;
+  private final com.modernizedkitechensink.kitchensinkmodernized.service.TokenBlacklistService tokenBlacklistService;
 
   /**
    * Login endpoint - validates credentials and returns JWT tokens.
@@ -117,6 +123,20 @@ public class AuthController {
         .body(Map.of("error", "Email already registered"));
     }
 
+    // Validate email format using our custom validation service
+    EmailValidationService.ValidationResult emailValidation = emailValidationService.validate(request.getEmail());
+    if (!emailValidation.isValid()) {
+      return ResponseEntity.badRequest()
+        .body(Map.of("error", emailValidation.getErrorMessage()));
+    }
+
+    // Validate phone format using our custom validation service
+    PhoneValidationService.ValidationResult phoneValidation = phoneValidationService.validate(request.getPhoneNumber());
+    if (!phoneValidation.isValid()) {
+      return ResponseEntity.badRequest()
+        .body(Map.of("error", phoneValidation.getErrorMessage()));
+    }
+
     // Get default USER role
     Role userRole = roleRepository.findByName("USER")
       .orElseThrow(() -> new RuntimeException("Default role USER not found"));
@@ -126,6 +146,9 @@ public class AuthController {
       .username(request.getUsername())
       .email(request.getEmail())
       .password(passwordEncoder.encode(request.getPassword()))
+      .firstName(request.getFirstName())
+      .lastName(request.getLastName())
+      .phoneNumber(request.getPhoneNumber())
       .roles(Set.of(userRole))
       .enabled(true)
       .accountNonLocked(true)
@@ -134,7 +157,7 @@ public class AuthController {
       .build();
 
     userRepository.save(user);
-    log.info("User registered successfully: {}", request.getUsername());
+    log.info("User registered successfully: {} {} ({})", request.getFirstName(), request.getLastName(), request.getUsername());
 
     return ResponseEntity.status(HttpStatus.CREATED)
       .body(Map.of("message", "User registered successfully"));
@@ -196,7 +219,8 @@ public class AuthController {
   }
 
   /**
-   * Logout from all devices - revokes all refresh tokens for the user.
+   * Logout from all devices - revokes all refresh tokens and blacklists all access tokens.
+   * CRITICAL: Blacklist access tokens FIRST, then revoke refresh tokens.
    */
   @PostMapping("/logout-all")
   public ResponseEntity<?> logoutAll(Authentication authentication) {
@@ -204,8 +228,13 @@ public class AuthController {
     User user = userRepository.findByUsername(username)
       .orElseThrow(() -> new RuntimeException("User not found"));
     
+    // Step 1: Blacklist all access tokens in Redis (instant logout)
+    tokenBlacklistService.blacklistAllUserTokens(user.getId());
+    
+    // Step 2: Revoke all refresh tokens in MongoDB (prevent new access tokens)
     refreshTokenService.revokeAllTokensForUser(user);
-    log.info("User {} logged out from all devices", username);
+    
+    log.info("User {} logged out from all devices (access tokens blacklisted + refresh tokens revoked)", username);
     
     return ResponseEntity.ok(Map.of("message", "Logged out from all devices"));
   }
@@ -243,6 +272,89 @@ public class AuthController {
       "enabled", user.isEnabled(),
       "accountNonLocked", user.isAccountNonLocked()
     ));
+  }
+
+  /**
+   * Request password reset.
+   * Sends reset email with token if email exists.
+   * Always returns success (security: don't reveal if email exists).
+   * 
+   * @param request Map containing "email"
+   * @return Success message
+   */
+  @PostMapping("/forgot-password")
+  public ResponseEntity<?> forgotPassword(
+    @RequestBody Map<String, String> request,
+    HttpServletRequest httpRequest
+  ) {
+    String email = request.get("email");
+    
+    if (email == null || email.trim().isEmpty()) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Email is required"));
+    }
+
+    log.info("Password reset requested for email: {}", email);
+    
+    passwordResetService.requestPasswordReset(email.trim(), httpRequest);
+    
+    // Always return success (don't reveal if email exists)
+    return ResponseEntity.ok(Map.of(
+      "message", "If an account exists with this email, you will receive a password reset link shortly."
+    ));
+  }
+
+  /**
+   * Validate password reset token.
+   * 
+   * @param request Map containing "token"
+   * @return Validation result
+   */
+  @PostMapping("/validate-reset-token")
+  public ResponseEntity<?> validateResetToken(@RequestBody Map<String, String> request) {
+    String token = request.get("token");
+    
+    if (token == null || token.trim().isEmpty()) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Token is required"));
+    }
+
+    boolean isValid = passwordResetService.validateToken(token.trim());
+    
+    if (isValid) {
+      return ResponseEntity.ok(Map.of("message", "Token is valid"));
+    } else {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(Map.of("error", "Invalid or expired reset token"));
+    }
+  }
+
+  /**
+   * Reset password using token.
+   * 
+   * @param request Map containing "token" and "newPassword"
+   * @return Success or error message
+   */
+  @PostMapping("/reset-password")
+  public ResponseEntity<?> resetPassword(@RequestBody Map<String, String> request) {
+    String token = request.get("token");
+    String newPassword = request.get("newPassword");
+    
+    if (token == null || token.trim().isEmpty()) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Token is required"));
+    }
+    
+    if (newPassword == null || newPassword.length() < 8) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Password must be at least 8 characters"));
+    }
+
+    boolean success = passwordResetService.resetPassword(token.trim(), newPassword);
+    
+    if (success) {
+      log.info("Password reset successful");
+      return ResponseEntity.ok(Map.of("message", "Password reset successful. You can now login with your new password."));
+    } else {
+      return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+        .body(Map.of("error", "Invalid or expired reset token"));
+    }
   }
 }
 

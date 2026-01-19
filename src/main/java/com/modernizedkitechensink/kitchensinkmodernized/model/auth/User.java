@@ -51,6 +51,12 @@ public class User {
 
   private String password;  // BCrypt hashed - NEVER plain text!
 
+  private String firstName;
+  
+  private String lastName;
+  
+  private String phoneNumber;
+
   /**
    * User's roles - loaded from the "roles" collection.
    * @DBRef creates a reference (like a foreign key) instead of embedding.

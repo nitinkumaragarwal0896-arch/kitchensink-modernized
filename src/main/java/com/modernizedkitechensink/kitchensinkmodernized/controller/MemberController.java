@@ -60,9 +60,10 @@ public class MemberController {
   public ResponseEntity<Map<String, Object>> getAllMembers(
     @RequestParam(defaultValue = "0") int page,
     @RequestParam(defaultValue = "10") int size,
-    @RequestParam(defaultValue = "name,asc") String sort
+    @RequestParam(defaultValue = "name,asc") String sort,
+    @RequestParam(required = false) String search
   ) {
-    log.debug("Fetching members: page={}, size={}, sort={}", page, size, sort);
+    log.debug("Fetching members: page={}, size={}, sort={}, search={}", page, size, sort, search);
 
     // Validate and limit page size (max 100)
     if (size > 100) {
@@ -80,8 +81,14 @@ public class MemberController {
     // Create pageable request
     Pageable pageable = PageRequest.of(page, size, Sort.by(sortDirection, sortField));
 
-    // Fetch paginated data
-    Page<Member> memberPage = memberService.findAll(pageable);
+    // Fetch paginated data (with or without search)
+    Page<Member> memberPage;
+    if (search != null && !search.trim().isEmpty()) {
+      memberPage = memberService.searchMembers(search, pageable);
+      log.info("Found {} members matching search term: '{}'", memberPage.getTotalElements(), search);
+    } else {
+      memberPage = memberService.findAll(pageable);
+    }
 
     // Build response with pagination metadata
     Map<String, Object> response = new HashMap<>();

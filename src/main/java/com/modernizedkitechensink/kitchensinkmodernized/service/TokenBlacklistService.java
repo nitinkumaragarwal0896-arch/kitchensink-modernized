@@ -1,5 +1,7 @@
 package com.modernizedkitechensink.kitchensinkmodernized.service;
 
+import com.modernizedkitechensink.kitchensinkmodernized.model.auth.RefreshToken;
+import com.modernizedkitechensink.kitchensinkmodernized.repository.RefreshTokenRepository;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
@@ -15,6 +17,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -40,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 public class TokenBlacklistService {
 
     private final RedisTemplate<String, String> redisTemplate;
+    private final RefreshTokenRepository refreshTokenRepository;
 
     @Value("${jwt.secret}")
     private String jwtSecret;
@@ -202,26 +206,56 @@ public class TokenBlacklistService {
     /**
      * Blacklist all tokens for a user (logout from all devices instantly).
      * 
-     * NOTE: This is a simplified implementation. For production, you'd:
-     * 1. Store user→tokens mapping in Redis
-     * 2. Or query active sessions from RefreshTokenRepository
-     * 3. Blacklist all their access tokens
+     * This method:
+     * 1. Finds all active (non-revoked) refresh tokens for the user
+     * 2. For each refresh token, gets its associated access token hash
+     * 3. Blacklists each access token hash in Redis
      * 
-     * For now, this is called when:
+     * Called when:
      * - User changes password (security best practice)
      * - Admin manually revokes all sessions
+     * - "Logout All Devices" action
+     * 
+     * WHY THIS WORKS:
+     * - Each RefreshToken stores accessTokenHash (the hash of its paired access token)
+     * - We blacklist ALL these hashes, making ALL access tokens invalid immediately
+     * - Even if tokens are still within their 15-minute validity, they're rejected
      * 
      * @param userId The user ID whose tokens should be blacklisted
      */
     public void blacklistAllUserTokens(String userId) {
-        // TODO: In production, maintain a Redis set of active tokens per user
-        // For now, this is a placeholder that would be called from:
-        // - ChangePasswordController (with user's current token)
-        // - SessionController (with user's refresh tokens → extract access tokens)
+        log.info("🚫 Starting to blacklist all tokens for user: {}", userId);
         
-        log.info("🚫 Blacklisting all tokens for user: {}", userId);
-        // Implementation would iterate through user's active sessions
-        // and call blacklistToken() for each access token
+        try {
+            // Get all active (non-revoked) refresh tokens for this user
+            List<RefreshToken> activeTokens = refreshTokenRepository.findByUser_IdAndRevokedFalse(userId);
+            
+            if (activeTokens.isEmpty()) {
+                log.info("No active tokens found for user: {}", userId);
+                return;
+            }
+            
+            log.info("Found {} active session(s) for user: {}", activeTokens.size(), userId);
+            
+            int blacklisted = 0;
+            for (RefreshToken refreshToken : activeTokens) {
+                String accessTokenHash = refreshToken.getAccessTokenHash();
+                
+                if (accessTokenHash != null && !accessTokenHash.isEmpty()) {
+                    // Blacklist this access token by its hash
+                    blacklistTokenByHash(accessTokenHash);
+                    blacklisted++;
+                } else {
+                    log.warn("RefreshToken {} has no accessTokenHash - cannot blacklist", refreshToken.getId());
+                }
+            }
+            
+            log.info("✅ Successfully blacklisted {} access token(s) for user: {}", blacklisted, userId);
+            
+        } catch (Exception e) {
+            log.error("❌ Failed to blacklist tokens for user: {}", userId, e);
+            throw new RuntimeException("Failed to blacklist user tokens", e);
+        }
     }
 
     /**

@@ -62,13 +62,16 @@ public class SecurityConfig {
       .authorizeHttpRequests(auth -> auth
         // Public endpoints - no authentication required
         .requestMatchers(
-          "/api/v1/auth/login",    // Login
-          "/api/v1/auth/register", // Register
-          "/api/v1/auth/refresh",  // Refresh token
-          "/swagger-ui/**",        // Swagger UI
+          "/api/v1/auth/login",              // Login
+          "/api/v1/auth/register",           // Register
+          "/api/v1/auth/refresh",            // Refresh token
+          "/api/v1/auth/forgot-password",    // Request password reset
+          "/api/v1/auth/validate-reset-token", // Validate reset token
+          "/api/v1/auth/reset-password",     // Reset password with token
+          "/swagger-ui/**",                  // Swagger UI
           "/swagger-ui.html",
-          "/v3/api-docs/**",       // OpenAPI docs
-          "/actuator/health"       // Health check
+          "/v3/api-docs/**",                 // OpenAPI docs
+          "/actuator/health"                 // Health check
         ).permitAll()
 
         // Admin endpoints - require system:admin permission

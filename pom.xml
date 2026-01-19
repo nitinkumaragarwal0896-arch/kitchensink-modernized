@@ -126,6 +126,15 @@
             <artifactId>spring-boot-starter-cache</artifactId>
         </dependency>
 
+        <!-- Email Support (for password reset, notifications) -->
+        <!-- Commented out for development - using mock email service -->
+        <!--
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        -->
+
         <!-- Rate Limiting (Bucket4j) - Commented out due to Artifactory access -->
         <!-- TODO: Enable for production deployment with public Maven Central -->
         <!--

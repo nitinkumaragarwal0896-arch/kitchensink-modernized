@@ -4,6 +4,8 @@ import com.modernizedkitechensink.kitchensinkmodernized.exception.DuplicateEmail
 import com.modernizedkitechensink.kitchensinkmodernized.exception.MemberNotFoundException;
 import com.modernizedkitechensink.kitchensinkmodernized.model.Member;
 import com.modernizedkitechensink.kitchensinkmodernized.repository.MemberRepository;
+import com.modernizedkitechensink.kitchensinkmodernized.validation.EmailValidationService;
+import com.modernizedkitechensink.kitchensinkmodernized.validation.PhoneValidationService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -30,6 +32,8 @@ import java.util.Optional;
 public class MemberServiceImpl implements IMemberService {
 
   private final MemberRepository memberRepository;
+  private final PhoneValidationService phoneValidationService;
+  private final EmailValidationService emailValidationService;
 
   /**
    * Find all members - cached.
@@ -60,6 +64,27 @@ public class MemberServiceImpl implements IMemberService {
   }
 
   /**
+   * Search members by name, email, or phone number.
+   * Uses MongoDB regex for case-insensitive partial matching.
+   * 
+   * NO CACHING for search results (they're dynamic and user-specific).
+   * 
+   * @param searchTerm The search term
+   * @param pageable Pagination and sorting parameters
+   * @return Page of matching members
+   */
+  @Override
+  public Page<Member> searchMembers(String searchTerm, Pageable pageable) {
+    log.debug("Searching members with term: '{}', page: {}", searchTerm, pageable.getPageNumber());
+    
+    if (searchTerm == null || searchTerm.trim().isEmpty()) {
+      return findAll(pageable);
+    }
+    
+    return memberRepository.searchMembers(searchTerm.trim(), pageable);
+  }
+
+  /**
    * Find member by ID - cached.
    * Cache key: the member ID
    */
@@ -86,7 +111,10 @@ public class MemberServiceImpl implements IMemberService {
   public Member register(Member member) {
     log.info("Registering new member: {}", member.getName());
 
-    // Application-level check (fast path)
+    // Step 1: Validate phone and email using validation services
+    validateMember(member);
+
+    // Step 2: Application-level duplicate check (fast path)
     if (memberRepository.findByEmail(member.getEmail()).isPresent()) {
       throw new DuplicateEmailException(member.getEmail());
     }
@@ -115,10 +143,13 @@ public class MemberServiceImpl implements IMemberService {
   public Member update(String id, Member memberData) {
     log.info("Updating member with id: {}", id);
 
+    // Step 1: Validate phone and email using validation services
+    validateMember(memberData);
+
     Member existingMember = memberRepository.findById(id)
       .orElseThrow(() -> new MemberNotFoundException(id));
 
-    // Check email uniqueness if email is changing
+    // Step 2: Check email uniqueness if email is changing
     if (!existingMember.getEmail().equals(memberData.getEmail())) {
       Optional<Member> memberWithEmail = memberRepository.findByEmail(memberData.getEmail());
       if (memberWithEmail.isPresent() && !memberWithEmail.get().getId().equals(id)) {
@@ -156,5 +187,37 @@ public class MemberServiceImpl implements IMemberService {
 
     memberRepository.deleteById(id);
     log.info("Member deleted: {}", id);
+  }
+
+  /**
+   * Validates a member's phone and email using validation services.
+   * Throws IllegalArgumentException with detailed error message if validation fails.
+   * 
+   * This provides consistent, production-grade validation with clear error messages
+   * that match what the frontend will show.
+   * 
+   * @param member The member to validate
+   * @throws IllegalArgumentException if validation fails (with specific error message)
+   */
+  private void validateMember(Member member) {
+    // Validate email
+    EmailValidationService.ValidationResult emailResult = 
+        emailValidationService.validate(member.getEmail());
+    if (!emailResult.isValid()) {
+      log.warn("Email validation failed for {}: {}", member.getEmail(), emailResult.getErrorMessage());
+      throw new IllegalArgumentException(emailResult.getErrorMessage());
+    }
+
+    // Validate phone number
+    PhoneValidationService.ValidationResult phoneResult = 
+        phoneValidationService.validate(member.getPhoneNumber());
+    if (!phoneResult.isValid()) {
+      log.warn("Phone validation failed for {}: {}", member.getPhoneNumber(), phoneResult.getErrorMessage());
+      throw new IllegalArgumentException(phoneResult.getErrorMessage());
+    }
+
+    log.debug("Member validation passed for email: {} and phone: {}", 
+              emailValidationService.normalize(member.getEmail()),
+              phoneValidationService.normalize(member.getPhoneNumber()));
   }
 }

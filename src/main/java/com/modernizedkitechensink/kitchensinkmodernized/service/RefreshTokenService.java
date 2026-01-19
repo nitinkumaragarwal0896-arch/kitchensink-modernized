@@ -41,7 +41,13 @@ public class RefreshTokenService {
 
   /**
    * Create and store a new refresh token.
-   * If user has too many active sessions, revoke the oldest one.
+   * 
+   * SESSION DEDUPLICATION:
+   * - Checks if user already has an active session from the same device/browser
+   * - If yes: Updates existing session instead of creating new one (prevents duplicate sessions)
+   * - If no: Creates new session
+   * 
+   * This ensures: 1 Browser = 1 Session (not 1 Tab = 1 Session)
    *
    * @param token The JWT refresh token string
    * @param accessToken The JWT access token string (for instant revocation)
@@ -53,7 +59,34 @@ public class RefreshTokenService {
   public RefreshToken createRefreshToken(String token, String accessToken, User user, HttpServletRequest request) {
     log.info("Creating refresh token for user: {}", user.getUsername());
 
-    // Check if user has too many active sessions
+    // Extract device and IP info
+    String deviceInfo = extractDeviceInfo(request);
+    String ipAddress = extractIpAddress(request);
+
+    // Hash the tokens (NEVER store plain tokens!)
+    String tokenHash = hashToken(token);
+    String accessTokenHash = hashToken(accessToken);
+
+    // SESSION DEDUPLICATION: Check if user already has an active session from this device
+    RefreshToken existingSession = findExistingSession(user, deviceInfo, ipAddress);
+    
+    if (existingSession != null) {
+      // REUSE existing session - just update it with new tokens
+      log.info("♻️ Reusing existing session for user: {} (device: {})", user.getUsername(), deviceInfo);
+      
+      existingSession.setTokenHash(tokenHash);
+      existingSession.setAccessTokenHash(accessTokenHash);
+      existingSession.setLastUsedAt(LocalDateTime.now());
+      existingSession.setExpiresAt(LocalDateTime.now().plusSeconds(refreshTokenExpiration / 1000));
+      existingSession.setRevoked(false); // In case it was revoked, un-revoke it
+      
+      existingSession = refreshTokenRepository.save(existingSession);
+      log.info("✅ Session updated (deduplicated): {}", existingSession.getId());
+      
+      return existingSession;
+    }
+
+    // No existing session - check session limits before creating new one
     int activeSessions = refreshTokenRepository.countByUserAndRevokedFalseAndExpiresAtAfter(
       user, LocalDateTime.now()
     );
@@ -64,18 +97,10 @@ public class RefreshTokenService {
       revokeOldestSession(user);
     }
 
-    // Extract device and IP info
-    String deviceInfo = extractDeviceInfo(request);
-    String ipAddress = extractIpAddress(request);
-
-    // Hash the tokens (NEVER store plain tokens!)
-    String tokenHash = hashToken(token);
-    String accessTokenHash = hashToken(accessToken);
-
-    // Create and save the refresh token
+    // Create NEW session
     RefreshToken refreshToken = RefreshToken.builder()
       .tokenHash(tokenHash)
-      .accessTokenHash(accessTokenHash)  // NEW: Store access token hash for instant revocation
+      .accessTokenHash(accessTokenHash)
       .user(user)
       .deviceInfo(deviceInfo)
       .ipAddress(ipAddress)
@@ -86,9 +111,42 @@ public class RefreshTokenService {
       .build();
 
     refreshToken = refreshTokenRepository.save(refreshToken);
-    log.info("Refresh token created with id: {}", refreshToken.getId());
+    log.info("✅ New session created: {}", refreshToken.getId());
 
     return refreshToken;
+  }
+
+  /**
+   * Find an existing active session for the same device/browser.
+   * 
+   * Matches sessions by:
+   * 1. Same user
+   * 2. Same deviceInfo (browser/OS)
+   * 3. Same IP address (or close enough)
+   * 4. Not revoked
+   * 5. Not expired
+   * 
+   * @param user The user
+   * @param deviceInfo Device fingerprint string
+   * @param ipAddress Client IP address
+   * @return Existing session if found, null otherwise
+   */
+  private RefreshToken findExistingSession(User user, String deviceInfo, String ipAddress) {
+    List<RefreshToken> activeSessions = refreshTokenRepository.findByUserAndRevokedFalseAndExpiresAtAfter(
+      user, LocalDateTime.now()
+    );
+    
+    // Find a session with matching device info and IP
+    return activeSessions.stream()
+      .filter(session -> {
+        boolean deviceMatches = deviceInfo.equals(session.getDeviceInfo());
+        boolean ipMatches = ipAddress.equals(session.getIpAddress());
+        
+        // Match if device is same (IP might change due to VPN, network switch, etc.)
+        return deviceMatches && ipMatches;
+      })
+      .findFirst()
+      .orElse(null);
   }
 
   /**
