@@ -258,6 +258,15 @@ public class AdminUserController {
 
     return userRepository.findById(id)
       .map(user -> {
+        // 🔧 FIX: Prevent disabling any user with ADMIN role
+        boolean hasAdminRole = user.getRoles().stream()
+          .anyMatch(role -> role.getName().equals("ADMIN"));
+        
+        if (hasAdminRole) {
+          return ResponseEntity.badRequest()
+            .body(Map.of("error", "Cannot disable a user with ADMIN role. This is a protected system role."));
+        }
+
         user.setEnabled(false);
         userRepository.save(user);
         log.info("User disabled: {}", user.getUsername());

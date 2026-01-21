@@ -4,6 +4,8 @@ import com.modernizedkitechensink.kitchensinkmodernized.exception.DuplicateEmail
 import com.modernizedkitechensink.kitchensinkmodernized.exception.MemberNotFoundException;
 import com.modernizedkitechensink.kitchensinkmodernized.model.Member;
 import com.modernizedkitechensink.kitchensinkmodernized.repository.MemberRepository;
+import com.modernizedkitechensink.kitchensinkmodernized.validation.EmailValidationService;
+import com.modernizedkitechensink.kitchensinkmodernized.validation.PhoneValidationService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -19,7 +21,9 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
 
 /**
  * Unit Tests for MemberServiceImpl.
@@ -34,6 +38,12 @@ class MemberServiceTest {
   @Mock
   private MemberRepository memberRepository;
 
+  @Mock
+  private EmailValidationService emailValidationService;
+
+  @Mock
+  private PhoneValidationService phoneValidationService;
+
   @InjectMocks
   private MemberServiceImpl memberService;
 
@@ -45,7 +55,19 @@ class MemberServiceTest {
     testMember.setId("1");
     testMember.setName("John Doe");
     testMember.setEmail("john@example.com");
-    testMember.setPhoneNumber("1234567890");
+    testMember.setPhoneNumber("9876543210");
+    
+    // Setup default mock behavior for validation services
+    // Using lenient() to avoid UnnecessaryStubbing errors for tests that don't need validation
+    lenient().when(emailValidationService.validate(anyString()))
+        .thenReturn(EmailValidationService.ValidationResult.valid());
+    lenient().when(emailValidationService.normalize(anyString()))
+        .thenAnswer(invocation -> invocation.getArgument(0, String.class).toLowerCase().trim());
+    
+    lenient().when(phoneValidationService.validate(anyString()))
+        .thenReturn(PhoneValidationService.ValidationResult.valid());
+    lenient().when(phoneValidationService.normalize(anyString()))
+        .thenAnswer(invocation -> invocation.getArgument(0, String.class).trim());
   }
 
   // ========== findAll Tests ==========
@@ -192,7 +214,9 @@ class MemberServiceTest {
       existingMember.setEmail("taken@example.com");
 
       Member updateData = new Member();
+      updateData.setName("John Doe");
       updateData.setEmail("taken@example.com");
+      updateData.setPhoneNumber("9876543210");
 
       when(memberRepository.findById("1"))
         .thenReturn(Optional.of(testMember));

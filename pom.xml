@@ -213,6 +213,62 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            
+            <!-- JaCoCo Maven Plugin for Code Coverage -->
+            <plugin>
+                <groupId>org.jacoco</groupId>
+                <artifactId>jacoco-maven-plugin</artifactId>
+                <version>0.8.11</version>
+                <executions>
+                    <!-- Prepare agent for test execution -->
+                    <execution>
+                        <id>prepare-agent</id>
+                        <goals>
+                            <goal>prepare-agent</goal>
+                        </goals>
+                    </execution>
+                    <!-- Generate report after tests -->
+                    <execution>
+                        <id>report</id>
+                        <phase>test</phase>
+                        <goals>
+                            <goal>report</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <!-- Exclude non-business-logic classes from coverage -->
+                    <excludes>
+                        <!-- Application & Config (not testable with unit tests) -->
+                        <exclude>**/*Application.class</exclude>
+                        <exclude>**/config/**</exclude>
+                        
+                        <!-- Models & DTOs (POJOs - no logic to test) -->
+                        <exclude>**/model/**</exclude>
+                        <exclude>**/dto/**</exclude>
+                        
+                        <!-- AOP Audit (requires Spring context) -->
+                        <exclude>**/audit/**</exclude>
+                        
+                        <!-- Controllers (need integration tests with MockMvc) -->
+                        <exclude>**/controller/**</exclude>
+                        
+                        <!-- Repository interfaces (Spring Data generated) -->
+                        <exclude>**/repository/**</exclude>
+                        
+                        <!-- Complex services requiring integration tests -->
+                        <exclude>**/service/JobService.class</exclude>
+                        <exclude>**/service/RefreshTokenService.class</exclude>
+                        <exclude>**/service/TokenBlacklistService.class</exclude>
+                        <exclude>**/service/PasswordResetService.class</exclude>
+                        <exclude>**/service/EmailService.class</exclude>
+                        
+                        <!-- Security integration classes (require Spring Security context) -->
+                        <exclude>**/security/JwtAuthenticationFilter.class</exclude>
+                        <exclude>**/security/CustomUserDetailsService.class</exclude>
+                    </excludes>
+                </configuration>
+            </plugin>
         </plugins>
     </build>
 

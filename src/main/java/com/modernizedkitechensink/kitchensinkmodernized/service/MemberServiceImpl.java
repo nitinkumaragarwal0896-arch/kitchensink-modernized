@@ -190,7 +190,7 @@ public class MemberServiceImpl implements IMemberService {
   }
 
   /**
-   * Validates a member's phone and email using validation services.
+   * Validates a member's name, phone, and email using validation services.
    * Throws IllegalArgumentException with detailed error message if validation fails.
    * 
    * This provides consistent, production-grade validation with clear error messages
@@ -200,6 +200,24 @@ public class MemberServiceImpl implements IMemberService {
    * @throws IllegalArgumentException if validation fails (with specific error message)
    */
   private void validateMember(Member member) {
+    // 🔧 FIX: Validate name (must match @Pattern in Member.java)
+    if (member.getName() == null || member.getName().trim().isEmpty()) {
+      log.warn("Name validation failed: Name is required");
+      throw new IllegalArgumentException("Name is required");
+    }
+    
+    String name = member.getName().trim();
+    if (name.length() < 1 || name.length() > 25) {
+      log.warn("Name validation failed for '{}': Name must be 1-25 characters", name);
+      throw new IllegalArgumentException("Name must be 1-25 characters");
+    }
+    
+    // Check for numbers in name (matches @Pattern regexp = "[^0-9]*")
+    if (name.matches(".*\\d.*")) {
+      log.warn("Name validation failed for '{}': Name must not contain numbers", name);
+      throw new IllegalArgumentException("Name must not contain numbers");
+    }
+
     // Validate email
     EmailValidationService.ValidationResult emailResult = 
         emailValidationService.validate(member.getEmail());
@@ -216,7 +234,8 @@ public class MemberServiceImpl implements IMemberService {
       throw new IllegalArgumentException(phoneResult.getErrorMessage());
     }
 
-    log.debug("Member validation passed for email: {} and phone: {}", 
+    log.debug("Member validation passed for name: '{}', email: {}, phone: {}", 
+              name,
               emailValidationService.normalize(member.getEmail()),
               phoneValidationService.normalize(member.getPhoneNumber()));
   }
