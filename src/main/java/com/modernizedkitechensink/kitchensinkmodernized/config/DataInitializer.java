@@ -108,6 +108,7 @@ public class DataInitializer implements CommandLineRunner {
       Role adminRole = roleRepository.findByName("ADMIN")
         .orElseThrow(() -> new RuntimeException("ADMIN role not found"));
 
+      // CAN BE FETCHED FROM VAULT
       User admin = User.builder()
         .username("admin")
         .email("admin@kitchensink.com")
