@@ -10,6 +10,7 @@ import com.modernizedkitechensink.kitchensinkmodernized.repository.RoleRepositor
 import com.modernizedkitechensink.kitchensinkmodernized.repository.UserRepository;
 import com.modernizedkitechensink.kitchensinkmodernized.security.JwtTokenProvider;
 import com.modernizedkitechensink.kitchensinkmodernized.service.RefreshTokenService;
+import com.modernizedkitechensink.kitchensinkmodernized.util.PasswordValidator;
 import com.modernizedkitechensink.kitchensinkmodernized.validation.EmailValidationService;
 import com.modernizedkitechensink.kitchensinkmodernized.validation.PhoneValidationService;
 import jakarta.servlet.http.HttpServletRequest;
@@ -23,6 +24,8 @@ import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.userdetails.UserDetails;
+import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
 
@@ -47,6 +50,7 @@ public class AuthController {
   private final RefreshTokenService refreshTokenService;
   private final EmailValidationService emailValidationService;
   private final PhoneValidationService phoneValidationService;
+  private final UserDetailsService userDetailsService;
   private final com.modernizedkitechensink.kitchensinkmodernized.service.PasswordResetService passwordResetService;
   private final com.modernizedkitechensink.kitchensinkmodernized.service.TokenBlacklistService tokenBlacklistService;
 
@@ -86,7 +90,7 @@ public class AuthController {
         .accessToken(accessToken)
         .refreshToken(refreshToken)
         .tokenType("Bearer")
-        .expiresIn(900)  // 15 minutes in seconds
+        .expiresIn(3600)  // 1 hour in seconds (matches jwt.access-token-expiration)
         .username(request.getUsername())
         .build());
 
@@ -166,6 +170,9 @@ public class AuthController {
   /**
    * Refresh token endpoint - get new access token using refresh token.
    * Validates that the refresh token exists in database and is not revoked.
+   * 
+   * CRITICAL FIX: Load user from database to get ACTUAL authorities.
+   * Without this, refreshed tokens have ZERO permissions, causing 403 errors.
    */
   @PostMapping("/refresh")
   public ResponseEntity<?> refresh(@RequestBody Map<String, String> request, HttpServletRequest httpRequest) {
@@ -186,33 +193,59 @@ public class AuthController {
     // Get username from refresh token
     String username = jwtTokenProvider.getUsernameFromToken(refreshToken);
 
-    // Generate new access token
+    // ✅ FIX: Load user with ACTUAL authorities from database
+    // This ensures the new access token contains all user permissions
+    UserDetails userDetails = userDetailsService.loadUserByUsername(username);
+
+    // ✅ FIX: Create Authentication with REAL authorities
     Authentication authentication = new UsernamePasswordAuthenticationToken(
-      username, null, java.util.Collections.emptyList()
+      userDetails, 
+      null, 
+      userDetails.getAuthorities() // ← Real permissions (member:read, member:write, etc.)
     );
 
+    // Generate new access token with correct permissions
     String newAccessToken = jwtTokenProvider.generateAccessToken(authentication);
 
     // Update the access token hash in the refresh token (for instant revocation)
     refreshTokenService.updateAccessTokenHash(storedToken, newAccessToken);
 
+    log.debug("Access token refreshed for user: {} with {} permissions", 
+      username, userDetails.getAuthorities().size());
+
     return ResponseEntity.ok(Map.of(
       "accessToken", newAccessToken,
       "tokenType", "Bearer",
-      "expiresIn", 900
+      "expiresIn", 3600  // ✅ FIX: 1 hour (3600s), not 15 min (900s)
     ));
   }
 
   /**
-   * Logout endpoint - revokes the refresh token for current session.
+   * Logout endpoint - revokes refresh token AND blacklists access token.
+   * 
+   * This ensures:
+   * 1. Instant logout (access token blacklisted in Redis)
+   * 2. Can't get new tokens (refresh token revoked in MongoDB)
+   * 3. Other tabs on same device log out immediately
    */
   @PostMapping("/logout")
-  public ResponseEntity<?> logout(@RequestBody Map<String, String> request) {
+  public ResponseEntity<?> logout(
+      @RequestBody Map<String, String> request,
+      @RequestHeader(value = "Authorization", required = false) String authHeader
+  ) {
     String refreshToken = request.get("refreshToken");
     
+    // Step 1: Revoke refresh token (prevent new access tokens)
     if (refreshToken != null) {
       refreshTokenService.revokeTokenByHash(refreshToken);
-      log.info("User logged out successfully");
+      log.info("Refresh token revoked");
+    }
+    
+    // Step 2: Blacklist current access token (instant logout) ✅ NEW!
+    if (authHeader != null && authHeader.startsWith("Bearer ")) {
+      String accessToken = authHeader.substring(7);
+      tokenBlacklistService.blacklistToken(accessToken);
+      log.info("Access token blacklisted for instant logout");
     }
     
     return ResponseEntity.ok(Map.of("message", "Logged out successfully"));
@@ -232,7 +265,7 @@ public class AuthController {
     tokenBlacklistService.blacklistAllUserTokens(user.getId());
     
     // Step 2: Revoke all refresh tokens in MongoDB (prevent new access tokens)
-    refreshTokenService.revokeAllTokensForUser(user);
+    refreshTokenService.revokeAllTokensForUser(user.getId());  // ← Changed to userId
     
     log.info("User {} logged out from all devices (access tokens blacklisted + refresh tokens revoked)", username);
     
@@ -342,11 +375,23 @@ public class AuthController {
       return ResponseEntity.badRequest().body(Map.of("error", "Token is required"));
     }
     
-    if (newPassword == null || newPassword.length() < 8) {
-      return ResponseEntity.badRequest().body(Map.of("error", "Password must be at least 8 characters"));
+    // ⚠️ SECURITY: Validate password strength using centralized validator
+    if (newPassword == null) {
+      return ResponseEntity.badRequest().body(Map.of("error", "Password is required"));
+    }
+    
+    PasswordValidator.ValidationResult passwordValidation = PasswordValidator.validate(newPassword);
+    if (!passwordValidation.isValid()) {
+      return ResponseEntity.badRequest().body(Map.of("error", passwordValidation.getErrorMessage()));
     }
 
-    boolean success = passwordResetService.resetPassword(token.trim(), newPassword);
+    boolean success;
+    try {
+      success = passwordResetService.resetPassword(token.trim(), newPassword);
+    } catch (IllegalArgumentException e) {
+      // Password validation failed in service layer (defense in depth)
+      return ResponseEntity.badRequest().body(Map.of("error", e.getMessage()));
+    }
     
     if (success) {
       log.info("Password reset successful");

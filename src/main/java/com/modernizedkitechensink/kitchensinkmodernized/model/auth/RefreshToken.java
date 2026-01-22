@@ -7,8 +7,9 @@ import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
 import org.springframework.data.mongodb.core.index.Indexed;
-import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -16,17 +17,31 @@ import java.time.LocalDateTime;
 /**
  * RefreshToken entity - tracks active user sessions.
  *
- * Purpose:
+ * PURPOSE:
  * - Enable "Active Sessions" management (view/revoke devices)
  * - Limit concurrent sessions per user
  * - Provide logout from all devices functionality
  * - Audit trail of user logins
  *
+ * DESIGN DECISION: Why userId (String) instead of @DBRef User?
+ * 
+ * ✅ More Control: Fetch User only when needed (not all queries need User object)
+ * ✅ MongoDB-Friendly: No expensive $lookup or multiple round-trips
+ * ✅ Explicit: No Spring Data "magic" - clear when User is fetched
+ * ✅ Performance: Many operations (blacklist, cleanup) only need userId
+ * ✅ Microservices-Ready: userId can reference a User in another service
+ * 
+ * Example Operations:
+ * - Blacklist all tokens: Only need userId (no User fetch!)
+ * - Cleanup expired: Only need expiresAt (no User fetch!)
+ * - Show sessions UI: Fetch User once, then iterate tokens
+ *
  * Example document in MongoDB:
  * {
  *   "_id": "507f1f77bcf86cd799439011",
- *   "tokenHash": "sha256hash...",  // Hashed token (never store plain!)
- *   "user": DBRef to User,
+ *   "tokenHash": "UFi6XgXd...",  // SHA-256 hash (never store plain!)
+ *   "accessTokenHash": "e+8rivo0...",  // For instant revocation
+ *   "userId": "696b2545bf7f4dc4514ec4e8",  // ← Just the ID!
  *   "deviceInfo": "Chrome 120.0 on macOS",
  *   "ipAddress": "192.168.1.100",
  *   "issuedAt": ISODate("2026-01-17T10:00:00Z"),
@@ -36,6 +51,16 @@ import java.time.LocalDateTime;
  * }
  */
 @Document(collection = "refresh_tokens")
+@CompoundIndexes({
+  @CompoundIndex(
+    name = "userId_revoked_expiresAt_idx",
+    def = "{'userId': 1, 'revoked': 1, 'expiresAt': -1}"
+  ),
+  @CompoundIndex(
+    name = "userId_deviceInfo_ipAddress_idx",
+    def = "{'userId': 1, 'deviceInfo': 1, 'ipAddress': 1}"
+  )
+})
 @Data
 @Builder
 @NoArgsConstructor
@@ -50,21 +75,27 @@ public class RefreshToken {
    * We NEVER store the actual token - only its hash.
    * This way, even if DB is compromised, tokens can't be stolen.
    */
-  @Indexed
+  @Indexed(unique = true)
   private String tokenHash;
 
   /**
    * SHA-256 hash of the access token associated with this refresh token.
    * Used for instant revocation when session is deleted from another device.
-   * Without this, revoked sessions can still make API calls for 15 minutes!
+   * Without this, revoked sessions can still make API calls for 1 hour!
    */
   private String accessTokenHash;
 
   /**
-   * User who owns this token.
+   * User ID who owns this token.
+   * 
+   * REFACTORED from @DBRef User to String userId:
+   * - Avoids unnecessary User fetches (many operations only need the ID)
+   * - More explicit control over when to load User object
+   * - Better MongoDB pattern (no joins/lookups)
+   * - Simpler queries and better performance
    */
-  @DBRef
-  private User user;
+  @Indexed
+  private String userId;
 
   /**
    * Device information: Browser, OS, etc.
@@ -87,8 +118,9 @@ public class RefreshToken {
 
   /**
    * When this token expires (7 days from issuance).
+   * TTL index configured via @CompoundIndex for auto-deletion of expired tokens.
    */
-  @Indexed(expireAfterSeconds = 0)  // MongoDB TTL index - auto-delete expired tokens
+  @Indexed
   private LocalDateTime expiresAt;
 
   /**

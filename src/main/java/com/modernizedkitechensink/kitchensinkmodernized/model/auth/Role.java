@@ -75,25 +75,4 @@ public class Role {
       this.permissions.add(p.getPermission());
     }
   }
-
-  /**
-   * Convenience method to check if role has a specific permission.
-   */
-  public boolean hasPermission(Permission permission) {
-    return permissions.contains(permission.getPermission());
-  }
-
-  /**
-   * Add a permission to this role.
-   */
-  public void addPermission(Permission permission) {
-    permissions.add(permission.getPermission());
-  }
-
-  /**
-   * Remove a permission from this role.
-   */
-  public void removePermission(Permission permission) {
-    permissions.remove(permission.getPermission());
-  }
 }

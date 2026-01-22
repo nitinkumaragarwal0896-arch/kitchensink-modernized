@@ -38,11 +38,14 @@ public class EmailService {
     /**
      * Send password reset email with reset link.
      * 
+     * Runs on dedicated EMAIL thread pool (emailTaskExecutor).
+     * This ensures email sending never blocks due to bulk operations.
+     * 
      * @param toEmail Recipient email
      * @param resetToken Reset token (plain text, will be included in URL)
      * @param username User's username
      */
-    @Async
+    @Async("emailTaskExecutor")
     public void sendPasswordResetEmail(String toEmail, String resetToken, String username) {
         try {
             String subject = "Password Reset Request - Kitchensink Application";
@@ -61,11 +64,13 @@ public class EmailService {
     /**
      * Send email verification email with verification link.
      * 
+     * Runs on dedicated EMAIL thread pool (emailTaskExecutor).
+     * 
      * @param toEmail Recipient email
      * @param verificationToken Verification token
      * @param username User's username
      */
-    @Async
+    @Async("emailTaskExecutor")
     public void sendEmailVerificationEmail(String toEmail, String verificationToken, String username) {
         try {
             String subject = "Email Verification - Kitchensink Application";
@@ -84,12 +89,14 @@ public class EmailService {
     /**
      * Send notification email when admin creates/updates user account.
      * 
+     * Runs on dedicated EMAIL thread pool (emailTaskExecutor).
+     * 
      * @param toEmail Recipient email
      * @param username User's username
      * @param action Action performed (created/updated)
      * @param adminUsername Admin who performed the action
      */
-    @Async
+    @Async("emailTaskExecutor")
     public void sendAccountNotificationEmail(String toEmail, String username, String action, String adminUsername) {
         try {
             String subject = "Account " + action + " - Kitchensink Application";

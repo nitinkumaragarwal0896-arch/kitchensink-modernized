@@ -85,35 +85,42 @@ public class AdminUserController {
   }
 
   /**
-   * Update user.
+   * Update user (partial update).
+   * 
+   * ⚠️ SECURITY: This endpoint only allows updating non-critical fields (email, etc.).
+   * For account status changes, use dedicated action endpoints:
+   *   - POST /{id}/enable
+   *   - POST /{id}/disable
+   *   - POST /{id}/unlock
+   * 
+   * This prevents bypassing business logic and security checks in those endpoints.
    */
   @PutMapping("/{id}")
   public ResponseEntity<?> updateUser(
     @PathVariable String id,
     @Valid @RequestBody Map<String, Object> request) {
 
-    // Prevent self-modification of critical fields
-    if (isSelfModification(id)) {
-      if (request.containsKey("enabled") || request.containsKey("accountNonLocked")) {
-        return ResponseEntity.badRequest()
-          .body(Map.of("error", "Cannot modify your own account status"));
-      }
+    // ⚠️ SECURITY: Block account status changes via PUT
+    // These must go through dedicated action endpoints with proper validation
+    if (request.containsKey("enabled") || request.containsKey("accountNonLocked")) {
+      return ResponseEntity.badRequest()
+        .body(Map.of(
+          "error", "Cannot modify account status via PUT endpoint",
+          "message", "Use dedicated endpoints: POST /{id}/enable, POST /{id}/disable, or POST /{id}/unlock"
+        ));
     }
 
     return userRepository.findById(id)
       .map(user -> {
+        // Only allow safe field updates
         if (request.containsKey("email")) {
           user.setEmail((String) request.get("email"));
         }
-        if (request.containsKey("enabled")) {
-          user.setEnabled((Boolean) request.get("enabled"));
-        }
-        if (request.containsKey("accountNonLocked")) {
-          user.setAccountNonLocked((Boolean) request.get("accountNonLocked"));
-        }
+        // Note: enabled and accountNonLocked are intentionally NOT handled here
+        // Use dedicated action endpoints for security and business logic
 
         userRepository.save(user);
-        log.info("User updated: {}", user.getUsername());
+        log.info("User updated: {} (email or other non-critical fields)", user.getUsername());
 
         return ResponseEntity.ok(Map.of("message", "User updated successfully"));
       })

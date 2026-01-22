@@ -21,11 +21,6 @@ public interface PasswordResetTokenRepository extends MongoRepository<PasswordRe
     Optional<PasswordResetToken> findByTokenHash(String tokenHash);
 
     /**
-     * Find all tokens for a specific user.
-     */
-    java.util.List<PasswordResetToken> findByUserId(String userId);
-
-    /**
      * Delete all tokens for a specific user.
      * Useful when password is successfully reset.
      */

@@ -57,7 +57,6 @@ public class MemberServiceImpl implements IMemberService {
    * 3. Cache the content list separately from the pagination metadata
    */
   @Override
-  // @Cacheable(value = "members", key = "'page:' + #pageable.pageNumber + ':size:' + #pageable.pageSize")
   public Page<Member> findAll(Pageable pageable) {
     log.debug("Fetching members page {} from database (caching disabled)", pageable.getPageNumber());
     return memberRepository.findAll(pageable);
@@ -124,7 +123,6 @@ public class MemberServiceImpl implements IMemberService {
       log.info("Member registered with id: {}", saved.getId());
       return saved;
     } catch (DuplicateKeyException e) {
-      // Race condition: Another thread/session saved the same email between check and save
       log.warn("Race condition detected: duplicate email {} during concurrent registration", member.getEmail());
       throw new DuplicateEmailException(member.getEmail());
     }
@@ -200,7 +198,6 @@ public class MemberServiceImpl implements IMemberService {
    * @throws IllegalArgumentException if validation fails (with specific error message)
    */
   private void validateMember(Member member) {
-    // 🔧 FIX: Validate name (must match @Pattern in Member.java)
     if (member.getName() == null || member.getName().trim().isEmpty()) {
       log.warn("Name validation failed: Name is required");
       throw new IllegalArgumentException("Name is required");

@@ -4,6 +4,7 @@ import com.modernizedkitechensink.kitchensinkmodernized.model.auth.PasswordReset
 import com.modernizedkitechensink.kitchensinkmodernized.model.auth.User;
 import com.modernizedkitechensink.kitchensinkmodernized.repository.PasswordResetTokenRepository;
 import com.modernizedkitechensink.kitchensinkmodernized.repository.UserRepository;
+import com.modernizedkitechensink.kitchensinkmodernized.util.PasswordValidator;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -50,6 +51,10 @@ public class PasswordResetService {
     /**
      * Request password reset for a user.
      * Generates a secure token and sends reset email.
+     * 
+     * NOTE: @Transactional provides transactional guarantees only with MongoDB replica sets.
+     * With standalone MongoDB, operations execute normally but without rollback capability.
+     * This is acceptable for password reset as operations (delete old tokens, save new) are idempotent.
      * 
      * @param email User's email
      * @param request HTTP request (for IP and user agent)
@@ -101,12 +106,22 @@ public class PasswordResetService {
     /**
      * Reset password using a valid token.
      * 
+     * NOTE: @Transactional provides transactional guarantees only with MongoDB replica sets.
+     * Operations here are atomic at document level (update user, mark token as used).
+     * 
      * @param token Reset token (plain text from email)
      * @param newPassword New password
      * @return true if successful, false if token invalid/expired
+     * @throws IllegalArgumentException if newPassword doesn't meet strength requirements
      */
     @Transactional
     public boolean resetPassword(String token, String newPassword) {
+        // ⚠️ SECURITY: Validate password strength BEFORE processing token
+        PasswordValidator.ValidationResult passwordValidation = PasswordValidator.validate(newPassword);
+        if (!passwordValidation.isValid()) {
+            throw new IllegalArgumentException(passwordValidation.getErrorMessage());
+        }
+        
         String tokenHash = hashToken(token);
         
         PasswordResetToken resetToken = tokenRepository.findByTokenHash(tokenHash).orElse(null);

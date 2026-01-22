@@ -68,7 +68,7 @@ public class RefreshTokenService {
     String accessTokenHash = hashToken(accessToken);
 
     // SESSION DEDUPLICATION: Check if user already has an active session from this device
-    RefreshToken existingSession = findExistingSession(user, deviceInfo, ipAddress);
+    RefreshToken existingSession = findExistingSession(user.getId(), deviceInfo, ipAddress);
     
     if (existingSession != null) {
       // REUSE existing session - just update it with new tokens
@@ -87,21 +87,21 @@ public class RefreshTokenService {
     }
 
     // No existing session - check session limits before creating new one
-    int activeSessions = refreshTokenRepository.countByUserAndRevokedFalseAndExpiresAtAfter(
-      user, LocalDateTime.now()
+    int activeSessions = refreshTokenRepository.countByUserIdAndRevokedFalseAndExpiresAtAfter(
+      user.getId(), LocalDateTime.now()
     );
 
     if (activeSessions >= maxConcurrentSessions) {
       log.warn("User {} has {} active sessions (max: {}). Revoking oldest session.",
         user.getUsername(), activeSessions, maxConcurrentSessions);
-      revokeOldestSession(user);
+      revokeOldestSession(user.getId());
     }
 
     // Create NEW session
     RefreshToken refreshToken = RefreshToken.builder()
       .tokenHash(tokenHash)
       .accessTokenHash(accessTokenHash)
-      .user(user)
+      .userId(user.getId())  // ← Store just the ID!
       .deviceInfo(deviceInfo)
       .ipAddress(ipAddress)
       .issuedAt(LocalDateTime.now())
@@ -120,32 +120,23 @@ public class RefreshTokenService {
    * Find an existing active session for the same device/browser.
    * 
    * Matches sessions by:
-   * 1. Same user
+   * 1. Same userId
    * 2. Same deviceInfo (browser/OS)
    * 3. Same IP address (or close enough)
    * 4. Not revoked
    * 5. Not expired
    * 
-   * @param user The user
+   * @param userId The user ID
    * @param deviceInfo Device fingerprint string
    * @param ipAddress Client IP address
    * @return Existing session if found, null otherwise
    */
-  private RefreshToken findExistingSession(User user, String deviceInfo, String ipAddress) {
-    List<RefreshToken> activeSessions = refreshTokenRepository.findByUserAndRevokedFalseAndExpiresAtAfter(
-      user, LocalDateTime.now()
-    );
-    
-    // Find a session with matching device info and IP
-    return activeSessions.stream()
-      .filter(session -> {
-        boolean deviceMatches = deviceInfo.equals(session.getDeviceInfo());
-        boolean ipMatches = ipAddress.equals(session.getIpAddress());
-        
-        // Match if device is same (IP might change due to VPN, network switch, etc.)
-        return deviceMatches && ipMatches;
-      })
-      .findFirst()
+  private RefreshToken findExistingSession(String userId, String deviceInfo, String ipAddress) {
+    // Use repository query for efficiency
+    return refreshTokenRepository
+      .findByUserIdAndDeviceInfoAndIpAddressAndRevokedFalseAndExpiresAtAfter(
+        userId, deviceInfo, ipAddress, LocalDateTime.now()
+      )
       .orElse(null);
   }
 
@@ -204,37 +195,38 @@ public class RefreshTokenService {
     refreshTokenRepository.findByTokenHash(tokenHash).ifPresent(rt -> {
       rt.revoke();
       refreshTokenRepository.save(rt);
-      log.info("Revoked refresh token for user: {}", rt.getUser().getUsername());
+      log.info("Revoked refresh token for userId: {}", rt.getUserId());
     });
   }
 
   /**
-   * Revoke all tokens for a user (logout from all devices).
+   * Revoke all tokens for a user by userId (logout from all devices).
    */
   @Transactional
-  public void revokeAllTokensForUser(User user) {
-    List<RefreshToken> tokens = refreshTokenRepository.findByUser(user);
+  public void revokeAllTokensForUser(String userId) {
+    List<RefreshToken> tokens = refreshTokenRepository.findByUserId(userId);
     tokens.forEach(RefreshToken::revoke);
     refreshTokenRepository.saveAll(tokens);
-    log.info("Revoked {} tokens for user: {}", tokens.size(), user.getUsername());
+    log.info("Revoked {} tokens for userId: {}", tokens.size(), userId);
   }
 
   /**
-   * Get all active sessions for a user.
+   * Get all active sessions for a user by userId.
+   * Caller must fetch User separately if needed.
    */
-  public List<RefreshToken> getActiveSessions(User user) {
-    return refreshTokenRepository.findByUserAndRevokedFalseAndExpiresAtAfter(
-      user, LocalDateTime.now()
+  public List<RefreshToken> getActiveSessions(String userId) {
+    return refreshTokenRepository.findByUserIdAndRevokedFalseAndExpiresAtAfter(
+      userId, LocalDateTime.now()
     );
   }
 
   /**
-   * Revoke the oldest active session for a user.
+   * Revoke the oldest active session for a user by userId.
    * Called when user exceeds max concurrent sessions.
    */
-  private void revokeOldestSession(User user) {
+  private void revokeOldestSession(String userId) {
     List<RefreshToken> activeSessions = refreshTokenRepository
-      .findByUserAndRevokedFalseAndExpiresAtAfter(user, LocalDateTime.now());
+      .findByUserIdAndRevokedFalseAndExpiresAtAfter(userId, LocalDateTime.now());
 
     if (!activeSessions.isEmpty()) {
       // Sort by issuedAt and revoke the oldest
@@ -243,8 +235,8 @@ public class RefreshTokenService {
         .ifPresent(oldest -> {
           oldest.revoke();
           refreshTokenRepository.save(oldest);
-          log.info("Revoked oldest session (issued: {}) for user: {}",
-            oldest.getIssuedAt(), user.getUsername());
+          log.info("Revoked oldest session (issued: {}) for userId: {}",
+            oldest.getIssuedAt(), userId);
         });
     }
   }

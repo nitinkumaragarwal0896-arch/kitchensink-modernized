@@ -70,7 +70,7 @@ public class AdminRoleController {
         map.put("id", role.getId());
         map.put("name", role.getName());
         map.put("description", role.getDescription() != null ? role.getDescription() : "");
-        map.put("permissions", new ArrayList<>(role.getPermissions()));
+        map.put("permissions", new ArrayList<>(role.getPermissionsAsEnums()));
         return ResponseEntity.ok(map);
       })
       .orElse(ResponseEntity.notFound().build());

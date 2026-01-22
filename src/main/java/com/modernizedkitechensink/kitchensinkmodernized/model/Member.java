@@ -9,9 +9,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedBy;
 import org.springframework.data.annotation.LastModifiedDate;
-import org.springframework.data.mongodb.core.index.CompoundIndex;
-import org.springframework.data.mongodb.core.index.CompoundIndexes;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -19,21 +16,37 @@ import java.time.LocalDateTime;
 /**
  * Member entity representing a registered member.
  * 
- * Indexes:
- * - email: unique index for fast email lookups and duplicate prevention
- * - name: index for sorting and searching by name
- * - createdAt: index for sorting by creation date (descending)
- * - updatedAt: index for sorting by modification date (descending)
- * - compound(createdBy, createdAt): for querying members by creator with date
+ * INDEXES:
+ * All indexes are managed centrally in MongoIndexInitializer.java for consistency.
+ * 
+ * Current indexes (4 total, optimized from original 7):
+ *   1. _id (unique, mandatory)
+ *   2. email_unique_idx (unique, for findByEmail and duplicate prevention)
+ *   3. createdAt_desc_idx (for sorting recent members)
+ *   4. name_createdAt_idx (compound, covers name sorting via prefix matching)
+ * 
+ * Query patterns covered:
+ *   • findByEmail(email) → email_unique_idx ✅
+ *   • findAllByOrderByNameAsc() → name_createdAt_idx (prefix) ✅
+ *   • sort=name,asc → name_createdAt_idx (prefix) ✅
+ *   • sort=createdAt,desc → createdAt_desc_idx ✅
+ *   • sort=name,desc → IN-MEMORY SORT (acceptable for small dataset)
+ *   • searchMembers($regex) → COLLSCAN (acceptable for small dataset)
+ * 
+ * Removed indexes (optimization):
+ *   • name_idx: Redundant (covered by name_createdAt_idx prefix)
+ *   • createdBy_createdAt_idx: UNUSED (no queries filter by createdBy)
+ *   • updatedAt_desc_idx: Rarely/never used (UI doesn't sort by updatedAt)
+ * 
+ * @see com.modernizedkitechensink.kitchensinkmodernized.config.MongoIndexInitializer#createMemberIndexes()
+ * 
+ * @author Nitin Agarwal
+ * @since 1.0.0
  */
 @Document(collection = "members")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-@CompoundIndexes({
-  @CompoundIndex(name = "createdBy_createdAt_idx", def = "{'createdBy': 1, 'createdAt': -1}"),
-  @CompoundIndex(name = "name_createdAt_idx", def = "{'name': 1, 'createdAt': -1}")
-})
 public class Member {
 
   @Id
@@ -42,12 +55,10 @@ public class Member {
   @NotBlank(message = "Name is required")
   @Size(min = 1, max = 25, message = "Name must be 1-25 characters")
   @Pattern(regexp = "[^0-9]*", message = "Name must not contain numbers")
-  @Indexed
   private String name;
 
   @NotBlank(message = "Email is required")
   @Email(message = "Invalid email format")
-  @Indexed(unique = true)
   private String email;
 
   @NotBlank(message = "Phone number is required")
@@ -56,11 +67,9 @@ public class Member {
   private String phoneNumber;
 
   @CreatedDate
-  @Indexed(direction = org.springframework.data.mongodb.core.index.IndexDirection.DESCENDING)
   private LocalDateTime createdAt;
 
   @LastModifiedDate
-  @Indexed(direction = org.springframework.data.mongodb.core.index.IndexDirection.DESCENDING)
   private LocalDateTime updatedAt;
 
   @CreatedBy

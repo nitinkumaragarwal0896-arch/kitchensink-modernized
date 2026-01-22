@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -21,6 +20,11 @@ import java.time.LocalDateTime;
  * - One-time use (marked as used after redemption)
  * - TTL expiration (auto-deleted from MongoDB)
  * - User-specific (tied to userId)
+ * 
+ * Indexes (managed by MongoIndexInitializer):
+ * - tokenHash_unique_idx: Unique index for token validation
+ * - userId_idx: Index for user-specific queries
+ * - expiresAt_ttl_idx: TTL index for auto-deletion
  * 
  * @author Nitin Agarwal
  * @since 1.0.0
@@ -38,14 +42,14 @@ public class PasswordResetToken {
     /**
      * SHA-256 hash of the reset token.
      * The actual token is sent via email, not stored in DB.
+     * Index: tokenHash_unique_idx (unique)
      */
-    @Indexed(unique = true)
     private String tokenHash;
 
     /**
      * User ID this token belongs to.
+     * Index: userId_idx
      */
-    @Indexed
     private String userId;
 
     /**
@@ -60,8 +64,8 @@ public class PasswordResetToken {
 
     /**
      * Token expiration timestamp.
+     * Index: expiresAt_ttl_idx (TTL - auto-deletes expired tokens)
      */
-    @Indexed(expireAfterSeconds = 0) // TTL index (expires at this time)
     private LocalDateTime expiresAt;
 
     /**

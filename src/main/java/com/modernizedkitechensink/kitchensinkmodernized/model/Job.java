@@ -6,9 +6,6 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
-import org.springframework.data.mongodb.core.index.CompoundIndex;
-import org.springframework.data.mongodb.core.index.CompoundIndexes;
-import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.Document;
 
 import java.time.LocalDateTime;
@@ -25,12 +22,28 @@ import java.util.List;
  * - Error tracking
  * - Detailed results (success/failure)
  * 
- * Indexes:
- * - userId: for querying user's jobs
- * - status: for filtering by job status
- * - createdAt: for sorting by creation date (TTL index candidate)
- * - compound(userId, status, createdAt): for efficient user job queries
- * - compound(status, createdAt): for cleanup queries
+ * INDEXES:
+ * All indexes are managed centrally in MongoIndexInitializer.java for consistency.
+ * 
+ * Current indexes (3 total, optimized via iterative refinement):
+ *   1. _id (unique, mandatory)
+ *   2. createdAt_ttl_idx (TTL auto-deletion after 7 days + cleanup queries)
+ *   3. userId_createdAt_status_idx (compound - covers ALL user-specific queries!)
+ * 
+ * Query patterns covered:
+ *   - findById(jobId) → _id index (IDHACK)
+ *   - findByUserIdOrderByCreatedAtDesc(userId) → userId_createdAt_status_idx (prefix match)
+ *   - findByUserIdAndStatusInOrderByCreatedAtDesc(userId, status) → userId_createdAt_status_idx (full match)
+ *   - findByCreatedAtBefore(dateTime) → createdAt_ttl_idx
+ * 
+ * KEY INSIGHT:
+ * The compound index field order { userId, createdAt, status } follows the rule:
+ *   Equality → Sort → Optional/Range
+ * 
+ * This allows ONE index to support BOTH query patterns via prefix matching,
+ * eliminating the need for separate indexes and reducing write overhead.
+ * 
+ * @see com.modernizedkitechensink.kitchensinkmodernized.config.MongoIndexInitializer#createJobIndexes()
  * 
  * @author Nitin Agarwal
  * @since 1.0.0
@@ -40,22 +53,15 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@CompoundIndexes({
-  @CompoundIndex(name = "userId_status_createdAt_idx", def = "{'userId': 1, 'status': 1, 'createdAt': -1}"),
-  @CompoundIndex(name = "status_createdAt_idx", def = "{'status': 1, 'createdAt': -1}")
-})
 public class Job {
 
   @Id
   private String id;
 
-  @Indexed
   private JobType type;
 
-  @Indexed
   private JobStatus status;
 
-  @Indexed
   private String userId;
 
   private String username;
@@ -75,9 +81,7 @@ public class Job {
   private Integer progress = 0; // 0-100
 
   @CreatedDate
-  @Indexed(direction = org.springframework.data.mongodb.core.index.IndexDirection.DESCENDING, 
-           expireAfterSeconds = 604800) // TTL index: auto-delete after 7 days
-  private LocalDateTime createdAt;
+  private LocalDateTime createdAt; // TTL index managed in MongoIndexInitializer
 
   private LocalDateTime startedAt;
 

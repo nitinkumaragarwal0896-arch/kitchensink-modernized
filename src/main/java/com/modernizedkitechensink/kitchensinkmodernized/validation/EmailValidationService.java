@@ -29,30 +29,13 @@ public class EmailValidationService {
         "^[a-zA-Z0-9_+&*-]+(?:\\.[a-zA-Z0-9_+&*-]+)*@(?:[a-zA-Z0-9-]+\\.)+[a-zA-Z]{2,7}$"
     );
 
-    // Common disposable email domains (optional blocking)
-    private static final Set<String> DISPOSABLE_DOMAINS = Set.of(
-        "tempmail.com", "throwaway.email", "guerrillamail.com", 
-        "10minutemail.com", "mailinator.com", "temp-mail.org"
-    );
-
     /**
-     * Validates an email address and returns a detailed error message if invalid.
+     * Validates an email address with optional disposable email blocking.
      * 
      * @param email The email address to validate
      * @return Validation result with error message (null if valid)
      */
     public ValidationResult validate(String email) {
-        return validate(email, false);
-    }
-
-    /**
-     * Validates an email address with optional disposable email blocking.
-     * 
-     * @param email The email address to validate
-     * @param blockDisposable Whether to block disposable email domains
-     * @return Validation result with error message (null if valid)
-     */
-    public ValidationResult validate(String email, boolean blockDisposable) {
         if (email == null || email.trim().isEmpty()) {
             return ValidationResult.invalid("Email address is required");
         }
@@ -157,11 +140,6 @@ public class EmailValidationService {
     // Validate format with regex (after structure checks)
     if (!EMAIL_PATTERN.matcher(trimmed).matches()) {
       return ValidationResult.invalid("Email format is invalid (must be like user@example.com)");
-    }
-
-    // Optional: Block disposable emails
-    if (blockDisposable && DISPOSABLE_DOMAINS.contains(domain.toLowerCase())) {
-      return ValidationResult.invalid("Disposable email addresses are not allowed. Please use a permanent email.");
     }
 
     log.debug("Email validated successfully: {}", maskEmail(trimmed));

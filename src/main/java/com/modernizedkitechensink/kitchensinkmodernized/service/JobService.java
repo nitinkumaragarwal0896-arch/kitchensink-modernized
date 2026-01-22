@@ -135,10 +135,8 @@ public class JobService {
 
   /**
    * Process bulk delete asynchronously.
-   * 
-   * This method runs in a separate thread pool and updates job status periodically.
    */
-  @Async
+  @Async("bulkTaskExecutor")
   public void processBulkDelete(String jobId, List<String> memberIds) {
     log.info("Starting bulk delete job {} for {} members", jobId, memberIds.size());
 
@@ -192,6 +190,7 @@ public class JobService {
           log.debug("Deleted member {} ({})", memberId, memberEmail);
         }
 
+        // TODO
         // Simulate some processing time (remove in production or adjust)
         Thread.sleep(100); // 100ms per member
 
@@ -239,6 +238,13 @@ public class JobService {
   /**
    * Process Excel upload asynchronously - ONE job for entire file.
    * 
+   * Runs on dedicated BULK thread pool (bulkTaskExecutor).
+   * Excel uploads are resource-intensive (parsing, validation, DB writes).
+   * 
+   * THREAD POOL: bulkTaskExecutor (2 core, 4 max, 20 queue)
+   * - Shared with bulk delete (both are heavy operations)
+   * - Max 4 concurrent Excel uploads to prevent memory issues
+   * 
    * Expected Excel format:
    * Row 1: Header (Name, Email, Phone)
    * Row 2+: Data rows
@@ -247,7 +253,7 @@ public class JobService {
    * @param fileBytes The Excel file content as byte array (to avoid temp file deletion)
    * @param fileName Original filename for logging
    */
-  @Async
+  @Async("bulkTaskExecutor")
   public void processExcelUpload(String jobId, byte[] fileBytes, String fileName) {
     log.info("Starting Excel upload job {} for file: {}", jobId, fileName);
 
@@ -323,6 +329,7 @@ public class JobService {
 
           log.debug("Imported member from row {} ({})", rowNumber, email);
 
+          // TODO
           // Simulate some processing time (remove in production or adjust)
           Thread.sleep(100); // 100ms per row
 

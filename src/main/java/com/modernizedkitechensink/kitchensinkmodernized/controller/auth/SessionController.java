@@ -56,7 +56,8 @@ public class SessionController {
     User user = userRepository.findByUsername(username)
       .orElseThrow(() -> new RuntimeException("User not found"));
     
-    List<RefreshToken> sessions = refreshTokenService.getActiveSessions(user);
+    // Get active sessions by userId (no User object needed!)
+    List<RefreshToken> sessions = refreshTokenService.getActiveSessions(user.getId());
     
     // Identify current session by refresh token hash
     String currentSessionId = null;
@@ -119,7 +120,7 @@ public class SessionController {
       }
     }
     
-    // ✅ NEW: Get the session to revoke and blacklist its access token
+    //Get the session to revoke and blacklist its access token
     Optional<RefreshToken> sessionToRevoke = refreshTokenRepository.findById(sessionId);
     if (sessionToRevoke.isPresent()) {
       RefreshToken session = sessionToRevoke.get();
@@ -128,7 +129,7 @@ public class SessionController {
       String accessTokenHash = session.getAccessTokenHash();
       if (accessTokenHash != null && !accessTokenHash.isEmpty()) {
         blacklistService.blacklistTokenByHash(accessTokenHash);
-        log.info("🚫 Blacklisted access token (hash) for INSTANT logout: user={}, session={}, device={}", 
+        log.info("Blacklisted access token (hash) for INSTANT logout: user={}, session={}, device={}",
                  username, sessionId, session.getDeviceInfo());
       }
       
@@ -149,17 +150,6 @@ public class SessionController {
     }
     
     return ResponseEntity.ok(response);
-  }
-  
-  /**
-   * Extract access token from Authorization header.
-   */
-  private String extractAccessToken(HttpServletRequest request) {
-    String bearerToken = request.getHeader("Authorization");
-    if (bearerToken != null && bearerToken.startsWith("Bearer ")) {
-      return bearerToken.substring(7);
-    }
-    return null;
   }
 }
 

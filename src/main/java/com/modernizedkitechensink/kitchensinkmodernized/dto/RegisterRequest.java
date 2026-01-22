@@ -1,5 +1,6 @@
 package com.modernizedkitechensink.kitchensinkmodernized.dto;
 
+import com.modernizedkitechensink.kitchensinkmodernized.util.PasswordValidator;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
@@ -35,10 +36,11 @@ public class RegisterRequest {
   private String email;
 
   @NotBlank(message = "Password is required")
-  @Size(min = 8, message = "Password must be at least 8 characters")
+  @Size(min = PasswordValidator.MIN_LENGTH, 
+        message = "Password must be at least 8 characters")
   @Pattern(
-    regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{}|;:,.<>?]).*$",
-    message = "Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character"
+    regexp = PasswordValidator.REGEX_PATTERN,
+    message = PasswordValidator.ERROR_MESSAGE
   )
   private String password;
 

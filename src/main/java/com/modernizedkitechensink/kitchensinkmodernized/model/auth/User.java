@@ -17,21 +17,6 @@ import java.util.Set;
 
 /**
  * User entity - represents a system user for authentication.
- *
- * This is separate from "Member" (business entity).
- * - Member = someone registered in the kitchensink directory
- * - User = someone who can log in to the system
- *
- * Example document in MongoDB:
- * {
- *   "_id": "507f1f77bcf86cd799439011",
- *   "username": "admin",
- *   "email": "admin@example.com",
- *   "password": "$2a$10$...",  // BCrypt hash
- *   "roles": [DBRef to Role documents],
- *   "enabled": true,
- *   "accountNonLocked": true
- * }
  */
 @Document(collection = "users")
 @Data
@@ -96,22 +81,6 @@ public class User {
   @LastModifiedDate
   private LocalDateTime updatedAt;
 
-  // ===== Helper Methods =====
-
-  /**
-   * Check if account is currently locked.
-   */
-  public boolean isLocked() {
-    if (accountNonLocked) {
-      return false;
-    }
-    // Check if lockout has expired
-    if (lockoutEndTime != null && LocalDateTime.now().isAfter(lockoutEndTime)) {
-      return false;  // Lockout expired
-    }
-    return true;
-  }
-
   /**
    * Increment failed login attempts and lock if threshold reached.
    */
@@ -131,27 +100,5 @@ public class User {
     accountNonLocked = true;
     lockoutEndTime = null;
     lastLoginDate = LocalDateTime.now();
-  }
-
-  /**
-   * Add a role to this user.
-   */
-  public void addRole(Role role) {
-    roles.add(role);
-  }
-
-  /**
-   * Remove a role from this user.
-   */
-  public void removeRole(Role role) {
-    roles.remove(role);
-  }
-
-  /**
-   * Check if user has a specific permission (through any role).
-   */
-  public boolean hasPermission(Permission permission) {
-    return roles.stream()
-      .anyMatch(role -> role.hasPermission(permission));
   }
 }

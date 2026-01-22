@@ -22,11 +22,6 @@ public interface JobRepository extends MongoRepository<Job, String> {
   List<Job> findByUserIdOrderByCreatedAtDesc(String userId);
 
   /**
-   * Find jobs by status.
-   */
-  List<Job> findByStatusIn(List<Job.JobStatus> statuses);
-
-  /**
    * Find jobs by user and status.
    */
   List<Job> findByUserIdAndStatusInOrderByCreatedAtDesc(String userId, List<Job.JobStatus> statuses);
@@ -36,9 +31,5 @@ public interface JobRepository extends MongoRepository<Job, String> {
    */
   List<Job> findByCreatedAtBefore(LocalDateTime dateTime);
 
-  /**
-   * Delete old completed jobs (for cleanup).
-   */
-  void deleteByStatusAndCompletedAtBefore(Job.JobStatus status, LocalDateTime dateTime);
 }
 

@@ -228,7 +228,7 @@ public class TokenBlacklistService {
         
         try {
             // Get all active (non-revoked) refresh tokens for this user
-            List<RefreshToken> activeTokens = refreshTokenRepository.findByUser_IdAndRevokedFalse(userId);
+            List<RefreshToken> activeTokens = refreshTokenRepository.findByUserIdAndRevokedFalse(userId);
             
             if (activeTokens.isEmpty()) {
                 log.info("No active tokens found for user: {}", userId);
@@ -256,18 +256,5 @@ public class TokenBlacklistService {
             log.error("❌ Failed to blacklist tokens for user: {}", userId, e);
             throw new RuntimeException("Failed to blacklist user tokens", e);
         }
-    }
-
-    /**
-     * Clear the entire blacklist (admin utility).
-     * 
-     * WARNING: Only use this in development or emergency scenarios.
-     * In production, let tokens expire naturally via Redis TTL.
-     */
-    public void clearBlacklist() {
-        log.warn("⚠️ Clearing entire token blacklist (admin action)");
-        // This is intentionally not implemented for safety
-        // If needed, use: redisTemplate.keys(BLACKLIST_PREFIX + "*")
-        // But KEYS is slow on production Redis - use SCAN instead
     }
 }

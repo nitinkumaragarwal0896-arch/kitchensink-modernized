@@ -4,6 +4,7 @@ import com.modernizedkitechensink.kitchensinkmodernized.model.auth.User;
 import com.modernizedkitechensink.kitchensinkmodernized.repository.UserRepository;
 import com.modernizedkitechensink.kitchensinkmodernized.service.RefreshTokenService;
 import com.modernizedkitechensink.kitchensinkmodernized.service.TokenBlacklistService;
+import com.modernizedkitechensink.kitchensinkmodernized.util.PasswordValidator;
 import com.modernizedkitechensink.kitchensinkmodernized.validation.EmailValidationService;
 import com.modernizedkitechensink.kitchensinkmodernized.validation.PhoneValidationService;
 import jakarta.validation.Valid;
@@ -196,9 +197,10 @@ public class ProfileController {
     }
 
     // Validate new password strength
-    if (!isPasswordStrong(newPassword)) {
+    PasswordValidator.ValidationResult passwordValidation = PasswordValidator.validate(newPassword);
+    if (!passwordValidation.isValid()) {
       return ResponseEntity.badRequest()
-        .body(Map.of("error", "Password must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character"));
+        .body(Map.of("error", passwordValidation.getErrorMessage()));
     }
 
     // Get user
@@ -231,7 +233,7 @@ public class ProfileController {
       tokenBlacklistService.blacklistAllUserTokens(user.getId());
       
       // Step 2: Revoke all refresh tokens in MongoDB (prevent new access tokens)
-      refreshTokenService.revokeAllTokensForUser(user);
+      refreshTokenService.revokeAllTokensForUser(user.getId());  // ← Changed to userId
       
       log.info("All sessions revoked for user after password change: {}", username);
     } catch (Exception e) {
@@ -244,22 +246,7 @@ public class ProfileController {
     ));
   }
 
-  /**
-   * Validate password strength.
-   * Must be at least 8 characters with 1 uppercase, 1 lowercase, 1 number, and 1 special character.
-   */
-  private boolean isPasswordStrong(String password) {
-    if (password == null || password.length() < 8) {
-      return false;
-    }
-    
-    boolean hasUpperCase = password.matches(".*[A-Z].*");
-    boolean hasLowerCase = password.matches(".*[a-z].*");
-    boolean hasDigit = password.matches(".*\\d.*");
-    boolean hasSpecial = password.matches(".*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>/?].*");
-    
-    return hasUpperCase && hasLowerCase && hasDigit && hasSpecial;
-  }
+  // Password validation moved to centralized PasswordValidator utility class
 
   /**
    * Get current authenticated username from SecurityContext.

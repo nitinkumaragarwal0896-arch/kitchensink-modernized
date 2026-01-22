@@ -52,10 +52,18 @@ public class AuditService {
   /**
    * Core logging method - saves audit entry asynchronously.
    *
+   * Runs on dedicated AUDIT thread pool (auditTaskExecutor).
+   * This ensures audit logging doesn't compete with critical operations.
+   * 
+   * THREAD POOL: auditTaskExecutor (1 core, 2 max, 500 queue)
+   * - Single thread is sufficient (logging is fast)
+   * - Large queue (audit can afford to wait)
+   * - DiscardPolicy: If overwhelmed, drops logs (non-critical)
+   * 
    * @Async means this runs in a separate thread pool,
    * so the main request doesn't wait for database write.
    */
-  @Async
+  @Async("auditTaskExecutor")
   public void logEvent(String action, String entityType, String entityId,
                        String status, String errorMessage, Map<String, Object> details) {
     try {
